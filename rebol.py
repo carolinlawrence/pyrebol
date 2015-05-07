@@ -138,8 +138,8 @@ def main():
         hope_stat = Statistics()
         fear_stat = Statistics()
 
-        own_trans_refs = [[] for i in xrange(0,nl)]
-        
+        own_trans_refs = [[] for i in xrange(0,len(nl))]
+
         sys.stderr.write("STARTING LEARNING\n")
         # iterations
         for it in xrange(1, argparser.iterations + 1):
