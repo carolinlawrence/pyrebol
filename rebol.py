@@ -73,7 +73,7 @@ def main():
     argparser.add_argument("-c", "--ini", type=str, required=True, help="the decoder's ini file")
     argparser.add_argument("-o", "--model_dir", type=str, required=True, default="",
                            help="specify cache file if one is to be used")
-    argparser.add_argument("-p", "--cache", type=str, required=False, help="the decoder's ini file")
+    argparser.add_argument("-p", "--cache", type=str, required=False, default="", help="the decoder's ini file")
     argparser.add_argument("-e", "--hold_out", type=int, required=False, default=0,
                            help="number of example to hold out for early stopping")
     argparser.add_argument("-t", "--type", type=str, required=True, help="the variant type")
