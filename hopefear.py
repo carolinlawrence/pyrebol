@@ -5,8 +5,8 @@ import operator
 import rebol
 from pyminion import decoder
 
+
 def hope_fear(kbest_list, action, rank=False):
-    index = None
     if action == 'hope':
         if rank is True:
             search_list = [entry.decoder_rank + entry.bleu_rank for entry in kbest_list]
@@ -30,10 +30,8 @@ def hope_fear(kbest_list, action, rank=False):
         sys.exit(1)
     return index
 
+
 def rampion(kbest_list, references, rank):  # references is a list potentially containing more than 1 reference
-    hope = None
-    fear = None
-    type_update = 0
     top1_equals_ref = False
     for ref in references:
         if kbest_list[0].string == ref:
@@ -48,10 +46,9 @@ def rampion(kbest_list, references, rank):  # references is a list potentially c
         type_update = 2
     return hope, fear, type_update
 
-def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser, ref_search_type=0):  # references is a list potentially containing more than 1 reference
-    hope = None
-    fear = None
-    type_update = 0
+
+# references is a list potentially containing more than 1 reference
+def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser, ref_search_type=0):
     if fb is True:  # top 1 becomes hope
         type_update = 1
         hope = kbest_list[0]
@@ -67,7 +64,7 @@ def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser
         fear = kbest_list[hope_fear(kbest_list, 'fear', rank)]
         # skip fear if it gets the right answer
         if rebol.execute_sentence(fear.string, gold_answer, nl_parser)[0] is True:
-            type_update = type_update * -1
+            type_update *= -1
     else:
         type_update = 2
         fear = kbest_list[0]
@@ -77,53 +74,9 @@ def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser
         hope = kbest_list[hope_fear(kbest_list, 'hope', rank)]
     return hope, fear, type_update, references
 
-def rebol_too_full(kbest_list, references, rank, fb, gold_answer, max, nl_parser, ref_search_type=0):  # references is a list potentially containing more than 1 reference
-    hope = None
-    fear = None
-    type_update = 0
-    decoder_type = "decoder_score"
-    bleu_type = "bleu_score"
-    if rank is True:
-        decoder_type = "decoder_rank"
-        bleu_type = "bleu_rank"
-    if fb is True:  # top 1 becomes hope
-        type_update = 1
-        hope = kbest_list[0]
-        if kbest_list[0].string not in references:
-            references.append(kbest_list[0].string)
-        # update to use this (1) or all references (2) in bleu scores. else we stick to the initial scores
-        if ref_search_type == 1:
-            for entry in kbest_list:
-                entry.bleu_score = decoder.per_sentence_bleu(entry.string, [kbest_list[0].string])
-        elif ref_search_type == 2:
-            for entry in kbest_list:
-                entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
-        # get fear
-        for count, entry in enumerate(sorted(kbest_list, key=operator.attrgetter(decoder_type)-operator.attrgetter(bleu_type), reverse=True)):
-            if count == 0 : continue # we already checked top1
-            if count == max: break # we do not want to look beyond max
-            if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is False:
-                fear = entry
-                break     
-    else:
-        type_update = 2
-        fear = kbest_list[0]
-        if ref_search_type == 2:
-            for entry in kbest_list:
-                entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
-        # get hope
-        for count, entry in enumerate(sorted(kbest_list, key=operator.attrgetter(decoder_type)+operator.attrgetter(bleu_type), reverse=True)):
-            if count == 0: continue # we already checked top1
-            if count == max: break # we do not want to look beyond max
-            if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is True:
-                hope = entry
-                break        
-    return hope, fear, type_update, references
 
-def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, ref_search_type=0):  # references is a list potentially containing more than 1 reference
-    hope = None
-    fear = None
-    type_update = 0
+# references is a list potentially containing more than 1 reference
+def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, ref_search_type=0):
     if fb is True:  # top 1 becomes hope
         type_update = 1
         hope = kbest_list[0]
@@ -145,41 +98,94 @@ def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, ref_se
     fear = kbest_list[hope_fear(kbest_list, 'fear', rank)]
     # skip fear if it gets the right answer
     if rebol.execute_sentence(fear.string, gold_answer, nl_parser)[0] is True:
-        type_update = type_update * -1
+        type_update *= -1
     return hope, fear, type_update, references
 
-def exec_only(kbest_list, references, fb, gold_answer, max, nl_parser):  # references is a list potentially containing more than 1 reference
+
+# references is a list potentially containing more than 1 reference
+def rebol_too_full(kbest_list, references, rank, fb, gold_answer, max_spot, nl_parser, ref_search_type=0):
     hope = None
     fear = None
-    type_update = 0
-    top1_equals_ref = False
-    for ref in references:
-        if kbest_list[0].string == ref:
-            top1_equals_ref = True
+    decoder_type = "decoder_score"
+    bleu_type = "bleu_score"
+    if rank is True:
+        decoder_type = "decoder_rank"
+        bleu_type = "bleu_rank"
     if fb is True:  # top 1 becomes hope
         type_update = 1
         hope = kbest_list[0]
         if kbest_list[0].string not in references:
             references.append(kbest_list[0].string)
-    elif len(references)>0:  # we fall back to a previously found correct sentence as our hope
+        # update to use this (1) or all references (2) in bleu scores. else we stick to the initial scores
+        if ref_search_type == 1:
+            for entry in kbest_list:
+                entry.bleu_score = decoder.per_sentence_bleu(entry.string, [kbest_list[0].string])
+        elif ref_search_type == 2:
+            for entry in kbest_list:
+                entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
+        # get fear
+        for count, entry in enumerate(
+                sorted(kbest_list, key=operator.attrgetter(decoder_type)-operator.attrgetter(bleu_type), reverse=True)):
+            if count == 0:
+                continue  # we already checked top1
+            if count == max_spot:
+                break  # we do not want to look beyond max_spot
+            if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is False:
+                fear = entry
+                break
+    else:
+        type_update = 2
+        fear = kbest_list[0]
+        if ref_search_type == 2:
+            for entry in kbest_list:
+                entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
+        # get hope
+        for count, entry in enumerate(
+                sorted(kbest_list, key=operator.attrgetter(decoder_type)+operator.attrgetter(bleu_type), reverse=True)):
+            if count == 0:
+                continue  # we already checked top1
+            if count == max_spot:
+                break  # we do not want to look beyond max_spot
+            if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is True:
+                hope = entry
+                break
+    return hope, fear, type_update, references
+
+
+# references is a list potentially containing more than 1 reference
+def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser):
+    hope = None
+    fear = None
+    hope_idx = 0
+    if fb is True:  # top 1 becomes hope
+        type_update = 1
+        hope = kbest_list[0]
+        if kbest_list[0].string not in references:
+            references.append(kbest_list[0].string)
+    elif len(references) > 0:  # we fall back to a previously found correct sentence as our hope
         hope = references[0]  # TODO which do we choose as hope if there is more than 1
         type_update = 1
-    else:  # we search the nbest list (ordered by decocder score) for a sentence with correct answer that will become our hope, else hope remains None
+    else:  # we search the nbest list (ordered by decocder score) for a sentence with correct answer
+        # that will become our hope, else hope remains None
         for count, entry in enumerate(kbest_list):
-            if count == 0: continue # we already checked top1
-            if count == max: break # we do not want to look beyond max
+            if count == 0:
+                continue  # we already checked top1
+            if count == max_spot:
+                break  # we do not want to look beyond max_spot
             if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is True:
-                hope_idx = count # so we can skip it when looking for fear
+                hope_idx = count  # so we can skip it when looking for fear
                 hope = entry
                 break
         type_update = 2
     # find fear
     for count, entry in enumerate(kbest_list):
-        if count == 0 or count == hope_idx: continue # we already checked top1 & that hope
-        if count == max: break # we do not want to look beyond max
+        if count == 0 or count == hope_idx:
+            continue  # we already checked top1 & that hope
+        if count == max_spot:
+            break  # we do not want to look beyond max_spot
         if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is False:
             fear = entry
-            break        
+            break
     if hope is None or fear is None:
-        type_update = type_update * -1
+        type_update *= -1
     return hope, fear, type_update, references
