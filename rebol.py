@@ -244,20 +244,20 @@ def main():
                 elif argparser.type == 'rebol_too_full':
                     hope, fear, update_type, reference[sent_counter] = \
                         hopefear.rebol_too_full(kbest_list, reference[sent_counter], fb,
-                                                gold_answer[sent_counter], max, cache, nl_parser,
+                                                gold_answer[sent_counter], argparser.max, nl_parser, cache,
                                                 own_trans_refs[sent_counter])
                 elif argparser.type == 'rebol_light':
                     hope, fear, update_type, reference[sent_counter] = \
                         hopefear.rebol_light(kbest_list, reference[sent_counter], argparser.rank, fb,
-                                             gold_answer[sent_counter], cache, nl_parser)
+                                             gold_answer[sent_counter], nl_parser, cache)
                 elif argparser.type == 'rebol_fear_neg_top1':
                     hope, fear, update_type, reference[sent_counter] = \
                         hopefear.rebol_fear_neg_top1(kbest_list, reference[sent_counter], argparser.rank, fb,
-                                                     gold_answer[sent_counter], cache, nl_parser)
+                                                     gold_answer[sent_counter], nl_parser, cache)
                 elif argparser.type == 'exec_only':
                     hope, fear, update_type, reference[sent_counter] = \
-                        hopefear.exec_only(kbest_list, reference[sent_counter], fb, gold_answer[sent_counter], max,
-                                           cache, nl_parser, own_trans_refs[sent_counter])
+                        hopefear.exec_only(kbest_list, reference[sent_counter], fb, gold_answer[sent_counter],
+                                           argparser.max, nl_parser, cache, own_trans_refs[sent_counter])
                 else:
                     sys.stderr.write("\nUnknown variant type\nEXITING\n")
                     sys.exit(1)

@@ -103,7 +103,7 @@ def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, cache,
 
 # references is a list potentially containing more than 1 reference
 # own_trans_ref is a list with Translation objects
-def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser, own_trans_ref, cache, ref_search_type=0):
+def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser, cache, own_trans_ref, ref_search_type=0):
     hope = None
     fear = None
     if fb is True:  # top 1 becomes hope
