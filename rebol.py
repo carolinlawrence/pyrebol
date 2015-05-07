@@ -263,7 +263,13 @@ def main():
                     sys.exit(1)
 
                 # execute & print info for hope
-                fb, mrl, answer, cached = execute_sentence(hope.string, gold_answer[sent_counter], nl_parser, cache)
+                if hope is not None:
+                    fb, mrl, answer, cached = execute_sentence(hope.string, gold_answer[sent_counter], nl_parser, cache)
+                else:
+                    fb = ""
+                    mrl = ""
+                    answer = ""
+                    cached = ""
                 sys.stderr.write("\n[HOPE]\n")
                 sys.stderr.write("        nrl: %s\n" % hope.string)
                 sys.stderr.write("        mrl: %s\n" % mrl)
@@ -278,7 +284,13 @@ def main():
                     hope_stat.correct_answer += 1
 
                 # execute & print info for fear
-                fb, mrl, answer, cached = execute_sentence(fear.string, gold_answer[sent_counter], nl_parser, cache)
+                if hope is not None:
+                    fb, mrl, answer, cached = execute_sentence(fear.string, gold_answer[sent_counter], nl_parser, cache)
+                else:
+                    fb = ""
+                    mrl = ""
+                    answer = ""
+                    cached = ""
                 sys.stderr.write("\n[FEAR]\n")
                 sys.stderr.write("        nrl: %s\n" % fear.string)
                 sys.stderr.write("        mrl: %s\n" % mrl)
@@ -356,7 +368,7 @@ def main():
         with open("%s.gold" % argparser.test) as f:
             gold_answer_test = f.read().splitlines()
         f.close()
-        if argparser.run_all is True:
+        if argparser.test_all is True:
             for it in range(1, argparser.iterations + 1):
                 run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, it)
         else:
