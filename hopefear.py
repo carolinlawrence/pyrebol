@@ -47,7 +47,7 @@ def rampion(kbest_list, references, rank):  # references is a list potentially c
 
 
 # references is a list potentially containing more than 1 reference
-def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser, ref_search_type=0):
+def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser, cache, ref_search_type=0):
     if fb is True:  # top 1 becomes hope
         type_update = 1
         hope = kbest_list[0]
@@ -62,7 +62,7 @@ def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
         fear = kbest_list[hope_fear(kbest_list, 'fear', rank)]
         # skip fear if it gets the right answer
-        if rebol.execute_sentence(fear.string, gold_answer, nl_parser)[0] is True:
+        if rebol.execute_sentence(fear.string, gold_answer, nl_parser, cache)[0] is True:
             type_update *= -1
     else:
         type_update = 2
@@ -75,7 +75,7 @@ def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser
 
 
 # references is a list potentially containing more than 1 reference
-def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, ref_search_type=0):
+def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, cache, ref_search_type=0):
     if fb is True:  # top 1 becomes hope
         type_update = 1
         hope = kbest_list[0]
@@ -96,14 +96,14 @@ def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, ref_se
         hope = kbest_list[hope_fear(kbest_list, 'hope', rank)]
     fear = kbest_list[hope_fear(kbest_list, 'fear', rank)]
     # skip fear if it gets the right answer
-    if rebol.execute_sentence(fear.string, gold_answer, nl_parser)[0] is True:
+    if rebol.execute_sentence(fear.string, gold_answer, nl_parser, cache)[0] is True:
         type_update *= -1
     return hope, fear, type_update, references
 
 
 # references is a list potentially containing more than 1 reference
 # own_trans_ref is a list with Translation objects
-def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser, own_trans_ref, ref_search_type=0):
+def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser, own_trans_ref, cache, ref_search_type=0):
     hope = None
     fear = None
     if fb is True:  # top 1 becomes hope
@@ -126,7 +126,7 @@ def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser,
                 continue  # we already checked top1
             if count == max_spot:
                 break  # we do not want to look beyond max_spot
-            if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is False:
+            if rebol.execute_sentence(entry.string, gold_answer, nl_parser, cache)[0] is False:
                 fear = entry
                 break
     elif len(own_trans_ref) > 0:  # we fall back to a previously found correct sentence as our hope
@@ -146,7 +146,7 @@ def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser,
                 continue  # we already checked top1
             if count == max_spot:
                 break  # we do not want to look beyond max_spot
-            if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is True:
+            if rebol.execute_sentence(entry.string, gold_answer, nl_parser, cache)[0] is True:
                 hope = entry
                 break
     return hope, fear, type_update, references, own_trans_ref
@@ -154,7 +154,7 @@ def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser,
 
 # references is a list potentially containing more than 1 reference
 # own_trans_ref is a list with Translation objects
-def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser, own_trans_ref):
+def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser, cache, own_trans_ref):
     hope = None
     fear = None
     hope_idx = 0
@@ -174,7 +174,7 @@ def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser, own_
                 continue  # we already checked top1
             if count == max_spot:
                 break  # we do not want to look beyond max_spot
-            if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is True:
+            if rebol.execute_sentence(entry.string, gold_answer, nl_parser, cache)[0] is True:
                 hope_idx = count  # so we can skip it when looking for fear
                 hope = entry
                 break
@@ -185,7 +185,7 @@ def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser, own_
             continue  # we already checked top1 & that hope
         if count == max_spot:
             break  # we do not want to look beyond max_spot
-        if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is False:
+        if rebol.execute_sentence(entry.string, gold_answer, nl_parser, cache)[0] is False:
             fear = entry
             break
     if hope is None or fear is None:

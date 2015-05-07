@@ -29,13 +29,19 @@ class Statistics:
         self.correct_answer = 0
 
 
-def execute_sentence(nl, gold_answer, nl_parser):
-    feedback = False
-    # get mrl+answer
-    hyp_mrl, hyp_answer = nl_parser.process_sentence(nl)
-    if hyp_answer.strip() == gold_answer.strip():
-        feedback = True
-    return feedback, hyp_mrl, hyp_answer
+def execute_sentence(nl, gold_answer, nl_parser, cache):
+    cached = False
+    fb = False
+    if nl in cache.dict:
+        cached = True
+        fb, mrl, answer = cache.dict[nl]
+    else:
+        # get mrl+answer
+        mrl, answer = nl_parser.process_sentence(nl)
+        if answer.strip() == gold_answer.strip():
+            fb = True
+        cache.dict[nl] = (fb, mrl, answer)
+    return fb, mrl, answer, cached
 
 
 def execute_set(nls, gold_answers, nl_parser):
@@ -215,13 +221,8 @@ def main():
                         entry.bleu_rank))
 
                 # execute top 1
-                cached = False
-                if kbest_list[0].string in cache.dict:
-                    cached = True
-                    fb, mrl, answer = cache.dict[kbest_list[0].string]
-                else:
-                    fb, mrl, answer = execute_sentence(kbest_list[0].string, gold_answer[sent_counter], nl_parser)
-                    cache.dict[kbest_list[0].string] = (fb, mrl, answer)
+                fb, mrl, answer, cached = execute_sentence(
+                    kbest_list[0].string, gold_answer[sent_counter], nl_parser, cache)
                 sys.stderr.write("\n[TOP 1]\n")
                 sys.stderr.write("        nrl: %s\n" % kbest_list[0].string)
                 sys.stderr.write("        mrl: %s\n" % mrl)
@@ -243,22 +244,53 @@ def main():
                 elif argparser.type == 'rebol_too_full':
                     hope, fear, update_type, reference[sent_counter] = \
                         hopefear.rebol_too_full(kbest_list, reference[sent_counter], fb,
-                                                gold_answer[sent_counter], max, nl_parser, own_trans_refs[sent_counter])
+                                                gold_answer[sent_counter], max, cache, nl_parser,
+                                                own_trans_refs[sent_counter])
                 elif argparser.type == 'rebol_light':
                     hope, fear, update_type, reference[sent_counter] = \
                         hopefear.rebol_light(kbest_list, reference[sent_counter], argparser.rank, fb,
-                                             gold_answer[sent_counter], nl_parser)
+                                             gold_answer[sent_counter], cache, nl_parser)
                 elif argparser.type == 'rebol_fear_neg_top1':
                     hope, fear, update_type, reference[sent_counter] = \
                         hopefear.rebol_fear_neg_top1(kbest_list, reference[sent_counter], argparser.rank, fb,
-                                                     gold_answer[sent_counter], nl_parser)
+                                                     gold_answer[sent_counter], cache, nl_parser)
                 elif argparser.type == 'exec_only':
                     hope, fear, update_type, reference[sent_counter] = \
                         hopefear.exec_only(kbest_list, reference[sent_counter], fb, gold_answer[sent_counter], max,
-                                           nl_parser, own_trans_refs[sent_counter])
+                                           cache, nl_parser, own_trans_refs[sent_counter])
                 else:
                     sys.stderr.write("\nUnknown variant type\nEXITING\n")
                     sys.exit(1)
+
+                # execute & print info for hope
+                fb, mrl, answer, cached = execute_sentence(hope.string, gold_answer[sent_counter], nl_parser, cache)
+                sys.stderr.write("\n[HOPE]\n")
+                sys.stderr.write("        nrl: %s\n" % hope.string)
+                sys.stderr.write("        mrl: %s\n" % mrl)
+                sys.stderr.write("     answer: %s\n" % answer)
+                sys.stderr.write("   correct?: %s\n" % fb)
+                sys.stderr.write("   cached?: %s\n" % cached)
+                if mrl.strip() != "":
+                    hope_stat.mrl += 1
+                if answer.strip() != "":
+                    hope_stat.answer += 1
+                if fb:
+                    hope_stat.correct_answer += 1
+
+                # execute & print info for fear
+                fb, mrl, answer, cached = execute_sentence(fear.string, gold_answer[sent_counter], nl_parser, cache)
+                sys.stderr.write("\n[FEAR]\n")
+                sys.stderr.write("        nrl: %s\n" % fear.string)
+                sys.stderr.write("        mrl: %s\n" % mrl)
+                sys.stderr.write("     answer: %s\n" % answer)
+                sys.stderr.write("   correct?: %s\n" % fb)
+                sys.stderr.write("   cached?: %s\n" % cached)
+                if mrl.strip() != "":
+                    fear_stat.mrl += 1
+                if answer.strip() != "":
+                    fear_stat.answer += 1
+                if fb:
+                    fear_stat.correct_answer += 1
 
                 # update type counter
                 if update_type == 1:
@@ -274,49 +306,8 @@ def main():
 
                 # check skip: changed position
                 if update_type == -1 or update_type == -2 or hope is None or fear is None:
+                    sys.stderr.write("SKIPPING EXAMPLE: No appropriate hope/fear\n")
                     continue
-
-                # execute & print info for hope
-                cached = False
-                if hope.string in cache.dict:
-                    cached = True
-                    fb, mrl, answer = cache.dict[hope.string]
-                else:
-                    fb, mrl, answer = execute_sentence(hope.string, gold_answer[sent_counter], nl_parser)
-                    cache.dict[kbest_list[0].string] = (fb, mrl, answer)
-                sys.stderr.write("\n[HOPE]\n")
-                sys.stderr.write("        nrl: %s\n" % hope.string)
-                sys.stderr.write("        mrl: %s\n" % mrl)
-                sys.stderr.write("     answer: %s\n" % answer)
-                sys.stderr.write("   correct?: %s\n" % fb)
-                sys.stderr.write("   cached?: %s\n" % cached)
-                if mrl.strip() != "":
-                    hope_stat.mrl += 1
-                if answer.strip() != "":
-                    hope_stat.answer += 1
-                if fb:
-                    hope_stat.correct_answer += 1
-
-                # execute & print info for fear
-                cached = False
-                if fear.string in cache.dict:
-                    cached = True
-                    fb, mrl, answer = cache.dict[fear.string]
-                else:
-                    fb, mrl, answer = execute_sentence(fear.string, gold_answer[sent_counter], nl_parser)
-                    cache.dict[kbest_list[0].string] = (fb, mrl, answer)
-                sys.stderr.write("\n[FEAR]\n")
-                sys.stderr.write("        nrl: %s\n" % fear.string)
-                sys.stderr.write("        mrl: %s\n" % mrl)
-                sys.stderr.write("     answer: %s\n" % answer)
-                sys.stderr.write("   correct?: %s\n" % fb)
-                sys.stderr.write("   cached?: %s\n" % cached)
-                if mrl.strip() != "":
-                    fear_stat.mrl += 1
-                if answer.strip() != "":
-                    fear_stat.answer += 1
-                if fb:
-                    fear_stat.correct_answer += 1
 
                 # update weights
                 sys.stderr.write("weights: %s\n" % weights)
@@ -391,7 +382,6 @@ def main():
 
 
 def run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, it):
-
     basename_model_dir = os.path.basename(argparser.model_dir)
 
     # call to the decoder
@@ -423,14 +413,8 @@ def run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, it):
     nr_answer = 0
     nr_correct = 0
     for sent_counter, sent in enumerate(nl_test):
-        cached = False
-        if translation_test[sent_counter] in cache.dict:
-            cached = True
-            test_fb, test_mrl, test_answer = cache.dict[translation_test[sent_counter]]
-        else:
-            test_fb, test_mrl, test_answer = execute_sentence(translation_test[sent_counter],
-                                                              gold_answer_test[sent_counter], nl_parser)
-            cache.dict[translation_test[sent_counter]] = (test_fb, test_mrl, test_answer)
+        test_fb, test_mrl, test_answer, cached = execute_sentence(
+            translation_test[sent_counter], gold_answer_test[sent_counter], nl_parser, cache)
 
         sigf_value = ["0", "0", "1"]  # assumes no mrl ("")
         if test_fb is True:
