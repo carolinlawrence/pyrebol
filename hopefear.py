@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import sys
-import operator
 import rebol
 from pyminion import decoder
 
@@ -103,14 +102,9 @@ def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, ref_se
 
 
 # references is a list potentially containing more than 1 reference
-def rebol_too_full(kbest_list, references, rank, fb, gold_answer, max_spot, nl_parser, ref_search_type=0):
+def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser, ref_search_type=0):
     hope = None
     fear = None
-    decoder_type = "decoder_score"
-    bleu_type = "bleu_score"
-    if rank is True:
-        decoder_type = "decoder_rank"
-        bleu_type = "bleu_rank"
     if fb is True:  # top 1 becomes hope
         type_update = 1
         hope = kbest_list[0]
@@ -125,7 +119,7 @@ def rebol_too_full(kbest_list, references, rank, fb, gold_answer, max_spot, nl_p
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
         # get fear
         for count, entry in enumerate(
-                sorted(kbest_list, key=operator.attrgetter(decoder_type)-operator.attrgetter(bleu_type), reverse=True)):
+                sorted(kbest_list, key=lambda translation: translation.decoder_score-translation.bleu_score, reverse=True)):
             if count == 0:
                 continue  # we already checked top1
             if count == max_spot:
@@ -141,7 +135,7 @@ def rebol_too_full(kbest_list, references, rank, fb, gold_answer, max_spot, nl_p
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
         # get hope
         for count, entry in enumerate(
-                sorted(kbest_list, key=operator.attrgetter(decoder_type)+operator.attrgetter(bleu_type), reverse=True)):
+                sorted(kbest_list, key=lambda translation: translation.decoder_score+translation.bleu_score, reverse=True)):
             if count == 0:
                 continue  # we already checked top1
             if count == max_spot:

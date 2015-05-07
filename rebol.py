@@ -240,7 +240,7 @@ def main():
                     hope, fear, update_type = hopefear.rampion(kbest_list, reference[sent_counter], argparser.rank)
                 elif argparser.type == 'rebol_too_full':
                     hope, fear, update_type, reference[sent_counter] = \
-                        hopefear.rebol_too_full(kbest_list, reference[sent_counter], argparser.rank, fb,
+                        hopefear.rebol_too_full(kbest_list, reference[sent_counter], fb,
                                                 gold_answer[sent_counter], max, nl_parser)
                 elif argparser.type == 'rebol_light':
                     hope, fear, update_type, reference[sent_counter] = \
