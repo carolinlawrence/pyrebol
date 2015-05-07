@@ -102,7 +102,8 @@ def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, ref_se
 
 
 # references is a list potentially containing more than 1 reference
-def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser, ref_search_type=0):
+# own_trans_ref is a list with Translation objects
+def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser, own_trans_ref, ref_search_type=0):
     hope = None
     fear = None
     if fb is True:  # top 1 becomes hope
@@ -110,6 +111,7 @@ def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser,
         hope = kbest_list[0]
         if kbest_list[0].string not in references:
             references.append(kbest_list[0].string)
+            own_trans_ref.append(kbest_list[0])
         # update to use this (1) or all references (2) in bleu scores. else we stick to the initial scores
         if ref_search_type == 1:
             for entry in kbest_list:
@@ -127,6 +129,10 @@ def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser,
             if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is False:
                 fear = entry
                 break
+    elif len(own_trans_ref) > 0:  # we fall back to a previously found correct sentence as our hope
+        hope = own_trans_ref[0]  # TODO which do we choose as hope if there is more than 1
+        type_update = 2
+        fear = kbest_list[0]
     else:
         type_update = 2
         fear = kbest_list[0]
@@ -143,11 +149,12 @@ def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser,
             if rebol.execute_sentence(entry.string, gold_answer, nl_parser)[0] is True:
                 hope = entry
                 break
-    return hope, fear, type_update, references
+    return hope, fear, type_update, references, own_trans_ref
 
 
 # references is a list potentially containing more than 1 reference
-def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser):
+# own_trans_ref is a list with Translation objects
+def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser, own_trans_ref):
     hope = None
     fear = None
     hope_idx = 0
@@ -156,9 +163,10 @@ def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser):
         hope = kbest_list[0]
         if kbest_list[0].string not in references:
             references.append(kbest_list[0].string)
-    elif len(references) > 0:  # we fall back to a previously found correct sentence as our hope
-        hope = references[0]  # TODO which do we choose as hope if there is more than 1
-        type_update = 1
+            own_trans_ref.append(kbest_list[0])
+    elif len(own_trans_ref) > 0:  # we fall back to a previously found correct sentence as our hope
+        hope = own_trans_ref[0]  # TODO which do we choose as hope if there is more than 1
+        type_update = 2
     else:  # we search the nbest list (ordered by decocder score) for a sentence with correct answer
         # that will become our hope, else hope remains None
         for count, entry in enumerate(kbest_list):
@@ -182,4 +190,4 @@ def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser):
             break
     if hope is None or fear is None:
         type_update *= -1
-    return hope, fear, type_update, references
+    return hope, fear, type_update, references, own_trans_ref

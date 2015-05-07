@@ -132,6 +132,8 @@ def main():
         hope_stat = Statistics()
         fear_stat = Statistics()
 
+        own_trans_refs = [[] for i in len(nl)]
+
         sys.stderr.write("STARTING LEARNING\n")
         # iterations
         for it in range(1, argparser.iterations + 1):
@@ -241,7 +243,7 @@ def main():
                 elif argparser.type == 'rebol_too_full':
                     hope, fear, update_type, reference[sent_counter] = \
                         hopefear.rebol_too_full(kbest_list, reference[sent_counter], fb,
-                                                gold_answer[sent_counter], max, nl_parser)
+                                                gold_answer[sent_counter], max, nl_parser, own_trans_refs[sent_counter])
                 elif argparser.type == 'rebol_light':
                     hope, fear, update_type, reference[sent_counter] = \
                         hopefear.rebol_light(kbest_list, reference[sent_counter], argparser.rank, fb,
@@ -253,7 +255,7 @@ def main():
                 elif argparser.type == 'exec_only':
                     hope, fear, update_type, reference[sent_counter] = \
                         hopefear.exec_only(kbest_list, reference[sent_counter], fb, gold_answer[sent_counter], max,
-                                           nl_parser)
+                                           nl_parser, own_trans_refs[sent_counter])
                 else:
                     sys.stderr.write("\nUnknown variant type\nEXITING\n")
                     sys.exit(1)
