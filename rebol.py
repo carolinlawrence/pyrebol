@@ -242,7 +242,7 @@ def main():
                 if argparser.type == 'rampion':
                     hope, fear, update_type = hopefear.rampion(kbest_list, reference[sent_counter], argparser.rank)
                 elif argparser.type == 'rebol_too_full':
-                    hope, fear, update_type, reference[sent_counter] = \
+                    hope, fear, update_type, reference[sent_counter], own_trans_refs[sent_counter] = \
                         hopefear.rebol_too_full(kbest_list, reference[sent_counter], fb,
                                                 gold_answer[sent_counter], argparser.max, nl_parser, cache,
                                                 own_trans_refs[sent_counter])
@@ -255,7 +255,7 @@ def main():
                         hopefear.rebol_fear_neg_top1(kbest_list, reference[sent_counter], argparser.rank, fb,
                                                      gold_answer[sent_counter], nl_parser, cache)
                 elif argparser.type == 'exec_only':
-                    hope, fear, update_type, reference[sent_counter] = \
+                    hope, fear, update_type, reference[sent_counter], own_trans_refs[sent_counter] = \
                         hopefear.exec_only(kbest_list, reference[sent_counter], fb, gold_answer[sent_counter],
                                            argparser.max, nl_parser, cache, own_trans_refs[sent_counter])
                 else:
