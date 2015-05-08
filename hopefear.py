@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import sys
 import rebol
-from pyminion import decoder
+from nlpminion import decoder
 
 
 def hope_fear(kbest_list, action, rank=False):

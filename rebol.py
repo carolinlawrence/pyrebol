@@ -11,10 +11,10 @@ import traceback
 
 import hopefear
 from parser.parse_nl import NLParser
-from pyminion import decoder
-from pyminion import translation
-from pyminion.feature_vector import FeatureVector
-from pyminion.cache import Cache
+from nlpminion import decoder
+from nlpminion import translation
+from nlpminion.feature_vector import FeatureVector
+from nlpminion.cache import Cache
 
 
 class Statistics:
@@ -57,6 +57,12 @@ def execute_set(nls, gold_answers, nl_parser):
         else:
             feedback.append(False)
     return feedback, hyp_mrl, hyp_answer
+
+
+def convert_time(elapsed_time):
+    m, s = divmod(elapsed_time, 60)
+    h, m = divmod(m, 60)
+    return s, m, h
 
 
 def main():
@@ -267,20 +273,17 @@ def main():
                         sys.exit(1)
 
                     # execute & print info for hope
+                    sys.stderr.write("\n[HOPE]\n")
                     if hope is not None:
                         fb, mrl, answer, cached = execute_sentence(
                             hope.string, gold_answer[sent_counter], nl_parser, cache)
+                        sys.stderr.write("        nrl: %s\n" % hope.string)
+                        sys.stderr.write("        mrl: %s\n" % mrl)
+                        sys.stderr.write("     answer: %s\n" % answer)
+                        sys.stderr.write("   correct?: %s\n" % fb)
+                        sys.stderr.write("   cached?: %s\n" % cached)
                     else:
-                        fb = ""
-                        mrl = ""
-                        answer = ""
-                        cached = ""
-                    sys.stderr.write("\n[HOPE]\n")
-                    sys.stderr.write("        nrl: %s\n" % hope.string)
-                    sys.stderr.write("        mrl: %s\n" % mrl)
-                    sys.stderr.write("     answer: %s\n" % answer)
-                    sys.stderr.write("   correct?: %s\n" % fb)
-                    sys.stderr.write("   cached?: %s\n" % cached)
+                        sys.stderr.write("None found\n")
                     if mrl.strip() != "":
                         hope_stat.mrl += 1
                     if answer.strip() != "":
@@ -289,20 +292,17 @@ def main():
                         hope_stat.correct_answer += 1
 
                     # execute & print info for fear
+                    sys.stderr.write("\n[FEAR]\n")
                     if hope is not None:
                         fb, mrl, answer, cached = execute_sentence(
                             fear.string, gold_answer[sent_counter], nl_parser, cache)
+                        sys.stderr.write("        nrl: %s\n" % fear.string)
+                        sys.stderr.write("        mrl: %s\n" % mrl)
+                        sys.stderr.write("     answer: %s\n" % answer)
+                        sys.stderr.write("   correct?: %s\n" % fb)
+                        sys.stderr.write("   cached?: %s\n" % cached)
                     else:
-                        fb = ""
-                        mrl = ""
-                        answer = ""
-                        cached = ""
-                    sys.stderr.write("\n[FEAR]\n")
-                    sys.stderr.write("        nrl: %s\n" % fear.string)
-                    sys.stderr.write("        mrl: %s\n" % mrl)
-                    sys.stderr.write("     answer: %s\n" % answer)
-                    sys.stderr.write("   correct?: %s\n" % fb)
-                    sys.stderr.write("   cached?: %s\n" % cached)
+                        sys.stderr.write("None found\n")
                     if mrl.strip() != "":
                         fear_stat.mrl += 1
                     if answer.strip() != "":
@@ -342,7 +342,8 @@ def main():
 
                 # print iteration statistics
                 sys.stderr.write("=============\n\n")
-                sys.stderr.write("Iteration took %s seconds\n" % (time.time() - start_it))
+                h, m, s = convert_time(time.time() - start_it)
+                sys.stderr.write("Iteration took: %d:%02d:%02d\n" % (h, m, s))
                 sys.stderr.write("=============\n")
                 sys.stderr.write("iteration %s/%s: %s examples\n" % (it, argparser.iterations, len(nl)))
                 sys.stderr.write("type 1 updates: %s / %s (actual / total)\n" % (type_1_actual, type_1_total))
@@ -361,7 +362,8 @@ def main():
                 weights.to_gz_file("output-weights.%s.gz" % it)
 
             # print total run statistics
-            sys.stderr.write("Learning took %s seconds\n" % (time.time() - start))
+            h, m, s = convert_time(time.time() - start)
+            sys.stderr.write("Learning took: %d:%02d:%02d\n" % (h, m, s))
             sys.stderr.write("LEARNING COMPLETE\n\n")
 
         sys.stderr.write("STARTING TESTING\n")
@@ -380,9 +382,11 @@ def main():
         else:
             run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, argparser.iterations)
 
-        sys.stderr.write("Testing took %s seconds\n" % (time.time() - start_test))
+        h, m, s = convert_time(time.time() - start_test)
+        sys.stderr.write("Testing took: %d:%02d:%02d\n" % (h, m, s))
         sys.stderr.write("TESTING COMPLETE\n\n")
-        sys.stderr.write("Total run time was %s seconds\n" % (time.time() - start))
+        h, m, s = convert_time(time.time() - start)
+        sys.stderr.write("Total run time was: %d:%02d:%02d\n" % (h, m, s))
         sys.stderr.write("RUN COMPLETE\n\n")
 
         # save cache
@@ -409,13 +413,13 @@ def run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, it):
                                                 "output-weights.%s.gz" % it, "%s.in" % argparser.test).strip()
     translation_out.close()
 
-    with open('output-translation.%s.%s%s' % (argparser.type, basename_model_dir, it)) as f:
+    with open('output-translation.%s.%s.%s' % (argparser.type, basename_model_dir, it)) as f:
         translation_test = f.read().splitlines()
     f.close()
 
     # get bleu
     sys.stderr.write("SCORE BLEU...\n")
-    bleu_out = open('output-bleu.%s.%s%s' % (argparser.type, basename_model_dir, it), 'w')
+    bleu_out = open('output-bleu.%s.%s.%s' % (argparser.type, basename_model_dir, it), 'w')
     print >> bleu_out, decoder.bleu("%s/mteval/fast_score" % argparser.decoder, "%s.ref" % argparser.test,
                                     'output-translation.%s.%s.%s' % (argparser.type, basename_model_dir, it)).strip()
     bleu_out.close()

@@ -53,8 +53,6 @@ def bleu(script_path, references, input):
             '-i', input]
     proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = proc.communicate()
-    sys.stderr.write("out: %s\n" % out)
-    sys.stderr.write("err: %s\n" % err)
     proc.stdout.close()
     proc.stderr.close()
     try:
