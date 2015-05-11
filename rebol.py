@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import argparse
+import codecs
 import operator
 import os
 import re
@@ -76,6 +77,8 @@ def main():
     cache = Cache()
 
     weights_tmp = ""
+
+    debug = codecs.open("debug.log", "w", encoding="utf-8")
 
     argparser = argparse.ArgumentParser()
     argparser.add_argument("-r", "--train", type=str, required=True,
@@ -174,7 +177,7 @@ def main():
                 for sent_counter, sent in enumerate(nl):
 
                     sys.stderr.write("-------------\n")
-                    sys.stderr.write("EXAMPLE %s\n" % (sent_counter + 1))
+                    sys.stderr.write("EXAMPLE %s\n" % (sent_counter))
                     sys.stderr.write("INPUT: %s\n" % re.match(r".*?\">(.*?)</.*?", sent).groups()[0])
                     sys.stderr.write("REFERENCE(S): %s\n" % reference[sent_counter])
                     sys.stderr.write("GOLD MRL: %s\n" % gold_mrl[sent_counter])
@@ -332,11 +335,12 @@ def main():
                         continue
 
                     # update weights
-                    sys.stderr.write("weights: %s\n" % str(weights).decode('utf-8'))
-                    sys.stderr.write("hope: %s\n" % str(hope.features).decode('utf-8'))
-                    sys.stderr.write("fear: %s\n" % str(fear.features).decode('utf-8'))
+                    print >> debug, "EXAMPLE %s" % (sent_counter)
+                    print >> debug, "weights: %s" % str(weights).decode('utf-8')
+                    print >> debug, "hope: %s" % str(hope.features).decode('utf-8')
+                    print >> debug, "fear: %s" % str(fear.features).decode('utf-8')
                     weights += (hope.features - fear.features) * argparser.learning_rate
-                    sys.stderr.write("weights after: %s\n" % str(weights).decode('utf-8'))
+                    print >> debug, "weights after: %s\n" % str(weights).decode('utf-8')
 
                     # delete old weights_tmp
                     os.remove(weights_tmp)
@@ -369,7 +373,6 @@ def main():
             h, m, s = convert_time(time.time() - start)
             sys.stderr.write("Learning took: %d:%02d:%02d\n" % (h, m, s))
             sys.stderr.write("LEARNING COMPLETE\n\n")
-
         sys.stderr.write("STARTING TESTING\n")
         start_test = time.time()
 
@@ -396,6 +399,7 @@ def main():
         # save cache
         cache.to_gz_file("output-cache.%s.gz" % os.path.basename(argparser.model_dir), " ||| ")
     except:
+        debug.close()
         exception_info = traceback.format_exc()
         # save cache
         cache.to_gz_file("output-cache.%s.gz" % os.path.basename(argparser.model_dir), " ||| ")

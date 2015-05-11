@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from abc import ABCMeta
+import sys
 
 class AbstractSparseVector:
     __metaclass__ = ABCMeta
@@ -29,8 +30,11 @@ class AbstractSparseVector:
     def pop(self, key):
         self.dict.pop(key)
 
-    def __str__(self):
-        return str(self.dict)
-
+    # the repr() call on a tuple causes hex to be printed ö -> \xc3\xb6g
     def __repr__(self):
-        return str(self.dict)
+        print_dict = "{"
+        for key in self.dict:
+            print_dict += "'%s': %s, " % (key, str(self.dict[key]))
+        print_dict = print_dict[:-2]
+        print_dict += "}"
+        return print_dict
