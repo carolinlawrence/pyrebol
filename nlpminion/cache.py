@@ -34,6 +34,8 @@ class Cache(AbstractSparseVector):
     def from_gz_file(self, in_file, sep=" ||| ", value_is_tuple=False):
         f = gzip.open(in_file, "rb")
         for line in f:
+            if line.starswith(" ||| "): #then there was no translation for this sentence, need for backward compability
+                continue
             (key, val) = tuple(line.strip().split(sep, 1))
             if value_is_tuple is True:
                 val = make_tuple(val)

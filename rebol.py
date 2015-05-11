@@ -32,6 +32,10 @@ class Statistics:
 def execute_sentence(nl, gold_answer, nl_parser, cache):
     cached = False
     fb = False
+    mrl = ""
+    answer = ""
+    if nl.strip() == "":  # if there was no translation then we also do not try to parse it
+        return fb, mrl, answer, cached
     if nl in cache.dict:
         cached = True
         fb, mrl, answer = cache.dict[nl]
@@ -328,11 +332,11 @@ def main():
                         continue
 
                     # update weights
-                    sys.stderr.write("weights: %s\n" % weights)
-                    sys.stderr.write("hope: %s\n" % hope.features)
-                    sys.stderr.write("fear: %s\n" % fear.features)
+                    sys.stderr.write("weights: %s\n" % str(weights).decode('utf-8'))
+                    sys.stderr.write("hope: %s\n" % str(hope.features).decode('utf-8'))
+                    sys.stderr.write("fear: %s\n" % str(fear.features).decode('utf-8'))
                     weights += (hope.features - fear.features) * argparser.learning_rate
-                    sys.stderr.write("weights after: %s\n" % weights)
+                    sys.stderr.write("weights after: %s\n" % str(weights).decode('utf-8'))
 
                     # delete old weights_tmp
                     os.remove(weights_tmp)
