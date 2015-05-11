@@ -97,7 +97,7 @@ def main():
                            help="number of example to hold out for early stopping")
     argparser.add_argument("-t", "--type", type=str, required=True, help="the variant type")
     argparser.add_argument("-l", "--learning_rate", type=float, required=True, help="the learning rate")
-    argparser.add_argument("-n", "--iterations", type=int, required=True, help="the number of iterations")
+    argparser.add_argument("-n", "--iterations", type=int, default=999, help="the number of iterations")
     argparser.add_argument("-k", "--kbest", type=int, required=False, default=100, help="size of kbest list")
     argparser.add_argument("-x", "--max", type=int, required=False, default=100,
                            help="number of entries considered when searching for hope/fear translation")
@@ -114,6 +114,7 @@ def main():
     nl_parser = NLParser(argparser.model_dir)
 
     try:
+        last_trained_iteration = argparser.iterations
         if not argparser.skip_train:
             ''' Run Train '''
             sys.stderr.write("CONFIGURATION\n")
@@ -145,6 +146,17 @@ def main():
                 gold_answer = f.read().splitlines()
             f.close()
 
+            # if use a hold out set, we splice the correct number from the top of the list
+            if argparser.hold_out>0:
+                nl_dev = nl[:argparser.hold_out]
+                nl = nl[argparser.hold_out+1:]
+                reference_dev = nl[:argparser.hold_out]
+                reference = nl[argparser.hold_out+1:]
+                gold_mrl_dev = nl[:argparser.hold_out]
+                gold_mrl = nl[argparser.hold_out+1:]
+                gold_answer_dev = nl[:argparser.hold_out]
+                gold_answer = nl[argparser.hold_out+1:]
+
             # get init weights
             weights = FeatureVector()
             weights.from_file(argparser.weights)
@@ -155,6 +167,8 @@ def main():
             fear_stat = Statistics()
 
             own_trans_refs = [[] for _ in xrange(0, len(nl))]
+
+            prev_f1_dev = 0.0
 
             sys.stderr.write("STARTING LEARNING\n")
             # iterations
@@ -369,14 +383,30 @@ def main():
                 # gz weights
                 weights.to_gz_file("output-weights.%s.gz" % it)
 
+                # check if we should stop
+                if argparser.hold_out>0:
+                    sys.stderr.write("STARTING DEV TEST\n")
+                    start_dev = time.time()
+                    f1_dev = run_test(nl_dev, gold_answer_dev, argparser, cache, nl_parser, it)
+                    h, m, s = convert_time(time.time() - start_dev)
+                    sys.stderr.write("Dev testing took: %d:%02d:%02d\n" % (h, m, s))
+                    if prev_f1_dev > f1_dev:
+                        sys.stderr.write("BEST DEV TEST REACHED LAST ITERATION: STOPPING TRAINING\n")
+                        sys.stderr.write("BEST ITERATION: %s\n\n" % it-1)
+                        last_trained_iteration = it - 1
+                        break
+                    prev_f1_dev = f1_dev
+                    sys.stderr.write("BEST DEV TEST NOT YET REACHED: CONTINUING TRAINING\n\n")
+
             # print total run statistics
             h, m, s = convert_time(time.time() - start)
             sys.stderr.write("Learning took: %d:%02d:%02d\n" % (h, m, s))
             sys.stderr.write("LEARNING COMPLETE\n\n")
+
+        ''' Run Test '''
         sys.stderr.write("STARTING TESTING\n")
         start_test = time.time()
 
-        ''' Run Test '''
         with open("%s.in" % argparser.test) as f:
             nl_test = f.read().splitlines()
         f.close()
@@ -384,10 +414,10 @@ def main():
             gold_answer_test = f.read().splitlines()
         f.close()
         if argparser.test_all is True:
-            for it in range(1, argparser.iterations + 1):
+            for it in range(1, last_trained_iteration + 1):
                 run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, it)
         else:
-            run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, argparser.iterations)
+            run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, last_trained_iteration)
 
         h, m, s = convert_time(time.time() - start_test)
         sys.stderr.write("Testing took: %d:%02d:%02d\n" % (h, m, s))
@@ -484,6 +514,7 @@ def run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, it):
     eval_out.close()
     # print test statistics
     sys.stderr.write("EVALUATION: %s\n" % eval_info)
+    return round(f1, 2)
 
 
 if __name__ == '__main__':
