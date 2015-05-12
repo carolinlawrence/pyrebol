@@ -83,10 +83,10 @@ def main():
     argparser = argparse.ArgumentParser()
     argparser.add_argument("-r", "--train", type=str, required=True,
                            help="the train data location (assumes the following appropriate file endings: "
-                                ".in, .ref, .mrl, .gold)")
+                                ".in, .mrl, .gold)")
     argparser.add_argument("-s", "--test", type=str, required=True,
                            help="the test data location (assumes the following appropriate file endings: "
-                                ".in, .ref, .mrl, .gold)")
+                                ".in, .mrl, .gold)")
     argparser.add_argument("-w", "--weights", type=str, required=True, help="the initial weights")
     argparser.add_argument("-d", "--decoder", type=str, required=True, help="the location where cdec resides")
     argparser.add_argument("-c", "--ini", type=str, required=True, help="the decoder's ini file")
@@ -103,6 +103,8 @@ def main():
                            help="number of entries considered when searching for hope/fear translation")
     argparser.add_argument("-v", "--verbose", type=int, choices=[0, 1, 2], required=False, default=0,
                            help="size of kbest list")
+    argparser.add_argument("-b", "--bleu_ref_type", type=int, choices=[0, 1, 2, 3], required=False, default=3,
+                           help="which reference(s) should be used to calculate per sentence bleu: 0 uses original reference, 1 uses new, just found reference, 2 uses all")
     argparser.add_argument("--rank", action="store_true", default=False, help="use ranks instead of scores")
     argparser.add_argument('--test_all', action="store_true", default=False,
                            help="run test for every weight generated during training")
@@ -117,6 +119,14 @@ def main():
         last_trained_iteration = argparser.iterations
         if not argparser.skip_train:
             ''' Run Train '''
+            ''' if argparser.bleu_ref_type is 3 that means the algorithms own indented default is used:
+            for rebol light & fear_neg_top1: 0. only use original reference
+            for rebol too full: 1. use new reference'''
+            if argparser.bleu_ref_type == 3 and argparser.type is 'rebol_too_full':
+                argparser.bleu_ref_type = 1
+            if argparser.bleu_ref_type == 3 and argparser.type is 'rebol_light' or 'rebol_fear_neg_top1':
+                argparser.bleu_ref_type = 0
+
             sys.stderr.write("CONFIGURATION\n")
             sys.stderr.write("=============\n")
             for option in vars(argparser):
@@ -148,7 +158,7 @@ def main():
 
             # if use a hold out set, we splice the correct number from the top of the list
             if argparser.hold_out>0:
-                # TODO delete comments below, make sure there is no 1 sent overlapp between dev and train
+                # TODO delete comments below, make sure there is no 1 sent overlap between dev and train
                 dev_prefix = "dev"
                 nl_dev_out = open("%s.in" % dev_prefix, 'w')
                 for ele in nl[:argparser.hold_out]:
@@ -280,22 +290,22 @@ def main():
                     # variants to find hope/fear
                     # type contains 0 by default, 1 for top1 is true and 2 for top1 is false,
                     # -1 is type 1 is skipped, -2 if type 2 is skipped
-                    if argparser.type == 'rampion':
+                    if argparser.type is 'rampion':
                         hope, fear, update_type = hopefear.rampion(kbest_list, reference[sent_counter], argparser.rank)
-                    elif argparser.type == 'rebol_too_full':
+                    elif argparser.type is 'rebol_too_full':
                         hope, fear, update_type, reference[sent_counter], own_trans_refs[sent_counter] = \
                             hopefear.rebol_too_full(kbest_list, reference[sent_counter], fb,
                                                     gold_answer[sent_counter], argparser.max, nl_parser, cache,
-                                                    own_trans_refs[sent_counter])
-                    elif argparser.type == 'rebol_light':
+                                                    own_trans_refs[sent_counter], argparser.bleu_ref_type)
+                    elif argparser.type is 'rebol_light':
                         hope, fear, update_type, reference[sent_counter] = \
                             hopefear.rebol_light(kbest_list, reference[sent_counter], argparser.rank, fb,
-                                                 gold_answer[sent_counter], nl_parser, cache)
-                    elif argparser.type == 'rebol_fear_neg_top1':
+                                                 gold_answer[sent_counter], nl_parser, cache, argparser.bleu_ref_type)
+                    elif argparser.type is 'rebol_fear_neg_top1':
                         hope, fear, update_type, reference[sent_counter] = \
                             hopefear.rebol_fear_neg_top1(kbest_list, reference[sent_counter], argparser.rank, fb,
-                                                         gold_answer[sent_counter], nl_parser, cache)
-                    elif argparser.type == 'exec_only':
+                                                         gold_answer[sent_counter], nl_parser, cache, argparser.bleu_ref_type)
+                    elif argparser.type is 'exec_only':
                         hope, fear, update_type, reference[sent_counter], own_trans_refs[sent_counter] = \
                             hopefear.exec_only(kbest_list, reference[sent_counter], fb, gold_answer[sent_counter],
                                                argparser.max, nl_parser, cache, own_trans_refs[sent_counter])
@@ -374,8 +384,9 @@ def main():
 
                 # print iteration statistics
                 sys.stderr.write("=============\n\n")
-                h, m, s = convert_time(time.time() - start_it)
-                sys.stderr.write("Iteration took: %d:%02d:%02d\n" % (h, m, s))
+                val = time.time() - start_it
+                h, m, s = convert_time(val)
+                sys.stderr.write("Iteration %s took: %d:%02d:%02d (%s)\n" % (it, h, m, s, val))
                 sys.stderr.write("=============\n")
                 sys.stderr.write("iteration %s/%s: %s examples\n" % (it, argparser.iterations, len(nl)))
                 sys.stderr.write("type 1 updates: %s / %s (actual / total)\n" % (type_1_actual, type_1_total))
