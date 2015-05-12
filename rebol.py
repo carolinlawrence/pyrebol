@@ -148,14 +148,24 @@ def main():
 
             # if use a hold out set, we splice the correct number from the top of the list
             if argparser.hold_out>0:
-                nl_dev = nl[:argparser.hold_out]
-                nl = nl[argparser.hold_out+1:]
-                reference_dev = nl[:argparser.hold_out]
-                reference = nl[argparser.hold_out+1:]
-                gold_mrl_dev = nl[:argparser.hold_out]
-                gold_mrl = nl[argparser.hold_out+1:]
-                gold_answer_dev = nl[:argparser.hold_out]
-                gold_answer = nl[argparser.hold_out+1:]
+                # TODO delete comments below, make sure there is no 1 sent overlapp between dev and train
+                dev_prefix = "dev"
+                nl_dev_out = open("%s.in" % dev_prefix, 'w')
+                for ele in nl[:argparser.hold_out]:
+                    print >>nl_dev_out, ele
+                nl_dev_out.close()
+                #nl = nl[argparser.hold_out:]
+                #reference = reference[argparser.hold_out:]
+                reference_dev_out = open("%s.ref" % dev_prefix, 'w')
+                for ele in reference[:argparser.hold_out]:
+                    print >>reference_dev_out, ele
+                reference_dev_out.close()
+                #gold_mrl = gold_mrl[argparser.hold_out:]
+                gold_answer_dev_out = open("%s.gold" % dev_prefix, 'w')
+                for ele in gold_answer[:argparser.hold_out]:
+                    print >>gold_answer_dev_out, ele
+                gold_answer_dev_out.close()
+                #gold_answer = gold_answer[argparser.hold_out:]
 
             # get init weights
             weights = FeatureVector()
@@ -387,12 +397,12 @@ def main():
                 if argparser.hold_out>0:
                     sys.stderr.write("STARTING DEV TEST\n")
                     start_dev = time.time()
-                    f1_dev = run_test(nl_dev, gold_answer_dev, argparser, cache, nl_parser, it)
+                    f1_dev = run_test(dev_prefix, argparser, cache, nl_parser, it, True)
                     h, m, s = convert_time(time.time() - start_dev)
                     sys.stderr.write("Dev testing took: %d:%02d:%02d\n" % (h, m, s))
                     if prev_f1_dev > f1_dev:
                         sys.stderr.write("BEST DEV TEST REACHED LAST ITERATION: STOPPING TRAINING\n")
-                        sys.stderr.write("BEST ITERATION: %s\n\n" % it-1)
+                        sys.stderr.write("BEST ITERATION: %s\n\n" % (it-1))
                         last_trained_iteration = it - 1
                         break
                     prev_f1_dev = f1_dev
@@ -407,17 +417,11 @@ def main():
         sys.stderr.write("STARTING TESTING\n")
         start_test = time.time()
 
-        with open("%s.in" % argparser.test) as f:
-            nl_test = f.read().splitlines()
-        f.close()
-        with open("%s.gold" % argparser.test) as f:
-            gold_answer_test = f.read().splitlines()
-        f.close()
         if argparser.test_all is True:
             for it in range(1, last_trained_iteration + 1):
-                run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, it)
+                run_test(argparser.test, argparser, cache, nl_parser, it)
         else:
-            run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, last_trained_iteration)
+            run_test(argparser.test, argparser, cache, nl_parser, last_trained_iteration)
 
         h, m, s = convert_time(time.time() - start_test)
         sys.stderr.write("Testing took: %d:%02d:%02d\n" % (h, m, s))
@@ -441,40 +445,49 @@ def main():
         sys.stderr.write(exception_info)
 
 
-def run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, it):
+def run_test(input_files, argparser, cache, nl_parser, it, dev_run=False):
+    with open("%s.in" % input_files) as f:
+        nl_input = f.read().splitlines()
+    f.close()
+    with open("%s.gold" % input_files) as f:
+        gold_answer_input = f.read().splitlines()
+    f.close()
     basename_model_dir = os.path.basename(argparser.model_dir)
-
+    if dev_run is True:
+        prefix = "dev"
+    else:
+        prefix = "test"
     # call to the decoder
     sys.stderr.write("DECODING...\n")
-    translation_out = open('output-translation.%s.%s.%s' % (argparser.type, basename_model_dir, it), 'w')
+    translation_out = open('output-translation.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it), 'w')
     print >> translation_out, decoder.translate("%s/decoder/cdec" % argparser.decoder, argparser.ini,
-                                                "output-weights.%s.gz" % it, "%s.in" % argparser.test).strip()
+                                                "output-weights.%s.gz" % it, "%s.in" % input_files).strip()
     translation_out.close()
 
-    with open('output-translation.%s.%s.%s' % (argparser.type, basename_model_dir, it)) as f:
+    with open('output-translation.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it)) as f:
         translation_test = f.read().splitlines()
     f.close()
 
     # get bleu
     sys.stderr.write("SCORE BLEU...\n")
-    bleu_out = open('output-bleu.%s.%s.%s' % (argparser.type, basename_model_dir, it), 'w')
-    print >> bleu_out, decoder.bleu("%s/mteval/fast_score" % argparser.decoder, "%s.ref" % argparser.test,
-                                    'output-translation.%s.%s.%s' % (argparser.type, basename_model_dir, it)).strip()
+    bleu_out = open('output-bleu.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it), 'w')
+    print >> bleu_out, decoder.bleu("%s/mteval/fast_score" % argparser.decoder, "%s.ref" % input_files,
+                                    'output-translation.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it)).strip()
     bleu_out.close()
 
-    mrl_out = open('output-mrl.%s.%s.%s' % (argparser.type, basename_model_dir, it), 'w')
-    answer_out = open('output-answers.%s.%s.%s' % (argparser.type, basename_model_dir, it), 'w')
-    sigf_out = open('output-sigf.%s.%s.%s' % (argparser.type, basename_model_dir, it), 'w')
+    mrl_out = open('output-mrl.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it), 'w')
+    answer_out = open('output-answers.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it), 'w')
+    sigf_out = open('output-sigf.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it), 'w')
 
     # get mrl + answer + f1 sigf
     # TODO: change to set execution? there we won't have the cache so it is not clear if it is worth it
     sys.stderr.write("PARSING...\n")
-    nr_total = len(nl_test)
+    nr_total = len(nl_input)
     nr_answer = 0
     nr_correct = 0
-    for sent_counter, sent in enumerate(nl_test):
+    for sent_counter, sent in enumerate(nl_input):
         test_fb, test_mrl, test_answer, cached = execute_sentence(
-            translation_test[sent_counter], gold_answer_test[sent_counter], nl_parser, cache)
+            translation_test[sent_counter], gold_answer_input[sent_counter], nl_parser, cache)
 
         sigf_value = ["0", "0", "1"]  # assumes no mrl ("")
         if test_fb is True:
@@ -485,10 +498,11 @@ def run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, it):
             sigf_value[1] = "1"
         if test_answer.strip() is not "":
             nr_answer += 1
-        sys.stderr.write("\nTEST EXAMPLE %s\n" % str(sent_counter + 1))
+        sys.stderr.write("\n%s EXAMPLE %s\n" % (prefix.upper(), str(sent_counter + 1)))
         sys.stderr.write("        nrl: %s\n" % translation_test[sent_counter])
         sys.stderr.write("        mrl: %s\n" % test_mrl)
         sys.stderr.write("     answer: %s\n" % test_answer)
+        sys.stderr.write("gold answer: %s\n" % gold_answer_input[sent_counter])
         sys.stderr.write("   correct?: %s\n" % test_fb)
         sys.stderr.write("   cached?: %s\n" % cached)
         print >> mrl_out, test_mrl
@@ -501,7 +515,7 @@ def run_test(nl_test, gold_answer_test, argparser, cache, nl_parser, it):
 
     # get eval
     sys.stderr.write("EVAL...\n")
-    eval_out = open('output-eval.%s.%s.%s' % (argparser.type, basename_model_dir, it), 'w')
+    eval_out = open('output-eval.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it), 'w')
     recall = 100 * (float(nr_correct) / float(nr_total))
     precision = 100 * (float(nr_correct) / float(nr_answer))
     if recall + precision != 0:

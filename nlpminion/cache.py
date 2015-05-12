@@ -38,7 +38,7 @@ class Cache(AbstractSparseVector):
                 continue
             (key, val) = tuple(line.strip().split(sep, 1))
             if value_is_tuple is True:
-                val = make_tuple(val)
+                val = make_tuple(val.strip())
             if val[0] == "True":
                 val[0] = True
             elif val[0] == "False":
