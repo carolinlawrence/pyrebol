@@ -67,7 +67,7 @@ def execute_set(nls, gold_answers, nl_parser):
 def convert_time(elapsed_time):
     m, s = divmod(elapsed_time, 60)
     h, m = divmod(m, 60)
-    return s, m, h
+    return h, m, s
 
 
 def main():
@@ -122,10 +122,11 @@ def main():
             ''' if argparser.bleu_ref_type is 3 that means the algorithms own indented default is used:
             for rebol light & fear_neg_top1: 0. only use original reference
             for rebol too full: 1. use new reference'''
-            if argparser.bleu_ref_type == 3 and argparser.type is 'rebol_too_full':
-                argparser.bleu_ref_type = 1
-            if argparser.bleu_ref_type == 3 and argparser.type is 'rebol_light' or 'rebol_fear_neg_top1':
-                argparser.bleu_ref_type = 0
+            if argparser.bleu_ref_type == 3:
+                if argparser.type == 'rebol_too_full':
+                    argparser.bleu_ref_type = 1
+                if argparser.type == 'rebol_light' or argparser.type == 'rebol_fear_neg_top1' :
+                    argparser.bleu_ref_type = 0
 
             sys.stderr.write("CONFIGURATION\n")
             sys.stderr.write("=============\n")
@@ -290,27 +291,27 @@ def main():
                     # variants to find hope/fear
                     # type contains 0 by default, 1 for top1 is true and 2 for top1 is false,
                     # -1 is type 1 is skipped, -2 if type 2 is skipped
-                    if argparser.type is 'rampion':
+                    if argparser.type == 'rampion':
                         hope, fear, update_type = hopefear.rampion(kbest_list, reference[sent_counter], argparser.rank)
-                    elif argparser.type is 'rebol_too_full':
+                    elif argparser.type == 'rebol_too_full':
                         hope, fear, update_type, reference[sent_counter], own_trans_refs[sent_counter] = \
                             hopefear.rebol_too_full(kbest_list, reference[sent_counter], fb,
                                                     gold_answer[sent_counter], argparser.max, nl_parser, cache,
                                                     own_trans_refs[sent_counter], argparser.bleu_ref_type)
-                    elif argparser.type is 'rebol_light':
+                    elif argparser.type == 'rebol_light':
                         hope, fear, update_type, reference[sent_counter] = \
                             hopefear.rebol_light(kbest_list, reference[sent_counter], argparser.rank, fb,
                                                  gold_answer[sent_counter], nl_parser, cache, argparser.bleu_ref_type)
-                    elif argparser.type is 'rebol_fear_neg_top1':
+                    elif argparser.type == 'rebol_fear_neg_top1':
                         hope, fear, update_type, reference[sent_counter] = \
                             hopefear.rebol_fear_neg_top1(kbest_list, reference[sent_counter], argparser.rank, fb,
                                                          gold_answer[sent_counter], nl_parser, cache, argparser.bleu_ref_type)
-                    elif argparser.type is 'exec_only':
+                    elif argparser.type == 'exec_only':
                         hope, fear, update_type, reference[sent_counter], own_trans_refs[sent_counter] = \
                             hopefear.exec_only(kbest_list, reference[sent_counter], fb, gold_answer[sent_counter],
                                                argparser.max, nl_parser, cache, own_trans_refs[sent_counter])
                     else:
-                        sys.stderr.write("\nUnknown variant type\nEXITING\n")
+                        sys.stderr.write("\nUnknown variant type: %s\nEXITING\n" % argparser.type)
                         sys.exit(1)
 
                     # execute & print info for hope
@@ -405,6 +406,7 @@ def main():
                 weights.to_gz_file("output-weights.%s.gz" % it)
 
                 # check if we should stop
+                # TODO rampion needs to make this decision based on BLEU
                 if argparser.hold_out>0:
                     sys.stderr.write("STARTING DEV TEST\n")
                     start_dev = time.time()
