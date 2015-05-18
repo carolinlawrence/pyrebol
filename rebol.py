@@ -379,7 +379,10 @@ def main():
                     sys.stderr.write("weights after: %s\n" % str(weights))
 
                     # delete old weights_tmp
+                    sys.stderr.write("weights tmp: %s\n" % weights_tmp)
+                    sys.stderr.write("file exists prior?: %s\n" % os.path.isfile(weights_tmp))
                     os.remove(weights_tmp)
+                    sys.stderr.write("file exists after?: %s\n" % os.path.isfile(weights_tmp))
 
                     # sys.stderr.write("open files rebol.py: %s\n" % get_open_fds())
                     sys.stderr.write("-------------\n\n")
