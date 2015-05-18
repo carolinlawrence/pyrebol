@@ -38,11 +38,12 @@ class Cache(AbstractSparseVector):
                 continue
             (key, val) = tuple(line.strip().split(sep, 1))
             if value_is_tuple is True:
-                val = make_tuple(val.strip())
-            if val[0] == "True":
-                val[0] = True
-            elif val[0] == "False":
-                val[0] = False
+                val_0, val_1, val_2 = tuple(val.strip()[1:-1].split(", ", 2))
+                if val_0 == "True":
+                    val_0 = True
+                elif val_0 == "False":
+                    val_0 = False
+                val = (val_0, val_1, val_2)
             self.dict[key] = val
         f.close()
 

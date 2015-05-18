@@ -135,6 +135,7 @@ def main():
             sys.stderr.write("Corpus: SPOC\n")
             sys.stderr.write("=============\n\n")
 
+            # load cache
             if argparser.cache.strip() is not "":
                 try:
                     cache.from_gz_file(argparser.cache, " ||| ", True)
@@ -237,6 +238,7 @@ def main():
                         no_trans += 1
                         sys.stderr.write("NO TRANSLATION, SKIPPING\n")
                         sys.stderr.write("-------------\n\n")
+                        os.remove(weights_tmp)
                         continue
                     for entry in out_raw.strip().split("\n"):
                         kbest_list.append(translation.Translation(entry.strip()))
@@ -369,20 +371,18 @@ def main():
                     # check skip: changed position
                     if update_type == -1 or update_type == -2 or hope is None or fear is None:
                         sys.stderr.write("SKIPPING EXAMPLE: No appropriate hope/fear\n")
+                        os.remove(weights_tmp)
                         continue
 
                     # update weights
-                    sys.stderr.write("weights: %s" % str(weights))
-                    sys.stderr.write("hope: %s" % str(hope.features))
-                    sys.stderr.write("fear: %s" % str(fear.features))
+                    sys.stderr.write("weights: %s\n" % str(weights))
+                    sys.stderr.write("hope: %s\n" % str(hope.features))
+                    sys.stderr.write("fear: %s\n" % str(fear.features))
                     weights += (hope.features - fear.features) * argparser.learning_rate
                     sys.stderr.write("weights after: %s\n" % str(weights))
 
                     # delete old weights_tmp
-                    sys.stderr.write("weights tmp: %s\n" % weights_tmp)
-                    sys.stderr.write("file exists prior?: %s\n" % os.path.isfile(weights_tmp))
                     os.remove(weights_tmp)
-                    sys.stderr.write("file exists after?: %s\n" % os.path.isfile(weights_tmp))
 
                     # sys.stderr.write("open files rebol.py: %s\n" % get_open_fds())
                     sys.stderr.write("-------------\n\n")
