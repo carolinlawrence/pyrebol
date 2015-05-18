@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import gzip
 from abstract_sparse_vector import AbstractSparseVector
-
+from decimal import Decimal
 
 class FeatureVector(AbstractSparseVector):
 
@@ -28,13 +28,13 @@ class FeatureVector(AbstractSparseVector):
     def to_file(self, out_file, sep=" "):
         f = open(out_file, "w")
         for key in sorted(self.dict):
-            print >> f, "%s%s%s" % (key, sep, self.dict[key])
+            print >> f, "%s%s%s" % (key, sep, Decimal(self.dict[key]))
         f.close()
 
     def to_gz_file(self, out_file, sep=" "):
         f = gzip.open(out_file, "wb")
         for key in self.dict:
-            f.write("%s%s%s\n" % (key, sep, self.dict[key]))
+            f.write("%s%s%s\n" % (key, sep, Decimal(self.dict[key])))
         f.close()
 
     def __add__(self, x):  # x has to be a DictVector, modifies self

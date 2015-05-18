@@ -204,7 +204,6 @@ scfg_max_span_limit=20')
       logging.info(' '.join(args))
       p = subprocess.Popen(args, stdout=log, stderr=log)
       p.wait()
-      log.close()
       
     log.close()
     os.chdir(wd)
@@ -284,22 +283,21 @@ scfg_max_span_limit=20')
     outfile.close()
 
     #actual decoding
-    weights_file_name = re.search(".*/(.*)", self.config.weights).groups()
+    if self.config.weights.strip()=="mira":
+      weights_file_name = "weights.mira-final.gz"
+    elif self.config.weights.strip()=="mert":
+      weights_file_name = "dpmert/weights.final"    
+    else:
+      weights_file_name = re.search(".*/(.*)", self.config.weights).groups()[0]
     args = [self.config.cdec_decode,
             '-c', '%s/cdec_test.ini' % (experiment_dir),
-            '-w', '%s/%s' % (experiment_dir,weights_file_name[0]),
+            '-w', '%s/%s' % (experiment_dir,weights_file_name),
             '-k', '%s' % (self.config.nbest), '-r',
             '-i', '%s/sent.inline.tmp' % (temp_dir)]
     outfile = open('%s/nbest.tmp' % temp_dir, 'w')
     p = subprocess.Popen(args, stdin=nullfile, stdout=outfile, stderr=nullfile)
     p.wait()
-    infile.close()
-    outfile.close()
     os.chdir(wd)
-    try:
-      p.kill()
-    except OSError:
-      pass
     return
 
   def decode_set(self, experiment_dir, sentences, temp_dir):
@@ -325,20 +323,20 @@ scfg_max_span_limit=20')
     outfile.close()
 
     #actual decoding
-    weights_file_name = re.search(".*/(.*)", self.config.weights).groups()
+    if self.config.weights.strip()=="mira":
+      weights_file_name = "weights.mira-final.gz"
+    elif self.config.weights.strip()=="mert":
+      weights_file_name = "dpmert/weights.final"    
+    else:
+      weights_file_name = re.search(".*/(.*)", self.config.weights).groups()[0]
     args = [self.config.cdec_decode,
             '-c', '%s/cdec_test.ini' % (experiment_dir),
-            '-w', '%s/%s' % (experiment_dir,weights_file_name[0]),
+            '-w', '%s/%s' % (experiment_dir,weights_file_name),
             '-k', '%s' % (self.config.nbest), '-r']
     infile = open('%s/sents.inline.tmp' % temp_dir, 'r')
     outfile = open('%s/nbest.tmp' % temp_dir, 'w')
     p = subprocess.Popen(args, stdin=infile, stdout=outfile, stderr=nullfile)
     p.wait()
     infile.close()
-    outfile.close()
     os.chdir(wd)
-    try:
-      p.kill()
-    except OSError:
-      pass
     return

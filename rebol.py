@@ -159,24 +159,24 @@ def main():
 
             # if use a hold out set, we splice the correct number from the top of the list
             if argparser.hold_out>0:
-                # TODO delete comments below, make sure there is no 1 sent overlap between dev and train
+                # TODO make sure there is no 1 sent overlap between dev and train
                 dev_prefix = "dev"
                 nl_dev_out = open("%s.in" % dev_prefix, 'w')
                 for ele in nl[:argparser.hold_out]:
                     print >>nl_dev_out, ele
                 nl_dev_out.close()
-                #nl = nl[argparser.hold_out:]
-                #reference = reference[argparser.hold_out:]
+                nl = nl[argparser.hold_out:]
                 reference_dev_out = open("%s.ref" % dev_prefix, 'w')
                 for ele in reference[:argparser.hold_out]:
                     print >>reference_dev_out, ele
                 reference_dev_out.close()
-                #gold_mrl = gold_mrl[argparser.hold_out:]
+                reference = reference[argparser.hold_out:]
                 gold_answer_dev_out = open("%s.gold" % dev_prefix, 'w')
                 for ele in gold_answer[:argparser.hold_out]:
                     print >>gold_answer_dev_out, ele
                 gold_answer_dev_out.close()
-                #gold_answer = gold_answer[argparser.hold_out:]
+                gold_answer = gold_answer[argparser.hold_out:]
+                gold_mrl = gold_mrl[argparser.hold_out:]
 
             # get init weights
             weights = FeatureVector()
@@ -189,7 +189,8 @@ def main():
 
             own_trans_refs = [[] for _ in xrange(0, len(nl))]
 
-            prev_f1_dev = 0.0
+            prev_1_dev_score = 0.0
+            prev_2_dev_score = 0.0
 
             sys.stderr.write("STARTING LEARNING\n")
             # iterations
@@ -223,6 +224,7 @@ def main():
                     if argparser.verbose >= 1:
                         sys.stderr.write("TEMP: %s\n" % weights_tmp)
                     weights.to_file(weights_tmp)
+                    weights.to_file("weights_%s_%s" % (it,sent_counter))
                     os.close(weights_handle)
                     # weights.to_file("weights_%s" % sent_counter)
 
@@ -370,12 +372,11 @@ def main():
                         continue
 
                     # update weights
-                    print >> debug, "EXAMPLE %s" % (sent_counter)
-                    print >> debug, "weights: %s" % str(weights).decode('utf-8')
-                    print >> debug, "hope: %s" % str(hope.features).decode('utf-8')
-                    print >> debug, "fear: %s" % str(fear.features).decode('utf-8')
+                    sys.stderr.write("weights: %s" % str(weights))
+                    sys.stderr.write("hope: %s" % str(hope.features))
+                    sys.stderr.write("fear: %s" % str(fear.features))
                     weights += (hope.features - fear.features) * argparser.learning_rate
-                    print >> debug, "weights after: %s\n" % str(weights).decode('utf-8')
+                    sys.stderr.write("weights after: %s\n" % str(weights))
 
                     # delete old weights_tmp
                     os.remove(weights_tmp)
@@ -406,19 +407,25 @@ def main():
                 weights.to_gz_file("output-weights.%s.gz" % it)
 
                 # check if we should stop
-                # TODO rampion needs to make this decision based on BLEU
                 if argparser.hold_out>0:
                     sys.stderr.write("STARTING DEV TEST\n")
                     start_dev = time.time()
-                    f1_dev = run_test(dev_prefix, argparser, cache, nl_parser, it, True)
+                    f1_dev, bleu_dev = run_test(dev_prefix, argparser, cache, nl_parser, it, True)
                     h, m, s = convert_time(time.time() - start_dev)
                     sys.stderr.write("Dev testing took: %d:%02d:%02d\n" % (h, m, s))
-                    if prev_f1_dev > f1_dev:
+                    if argparser.type == 'rampion':
+                        score_of_intereset_dev = bleu_dev
+                        sys.stderr.write("DEV SCORE: %s BLEU\n" % score_of_intereset_dev)
+                    else:
+                        score_of_intereset_dev = f1_dev
+                        sys.stderr.write("DEV SCORE: %s F1\n" % score_of_intereset_dev)
+                    if prev_1_dev_score > score_of_intereset_dev and prev_2_dev_score > prev_1_dev_score:
                         sys.stderr.write("BEST DEV TEST REACHED LAST ITERATION: STOPPING TRAINING\n")
-                        sys.stderr.write("BEST ITERATION: %s\n\n" % (it-1))
-                        last_trained_iteration = it - 1
+                        sys.stderr.write("BEST ITERATION: %s\n\n" % (it-2))
+                        last_trained_iteration = it - 2
                         break
-                    prev_f1_dev = f1_dev
+                    prev_2_dev_score = prev_1_dev_score
+                    prev_1_dev_score = score_of_intereset_dev
                     sys.stderr.write("BEST DEV TEST NOT YET REACHED: CONTINUING TRAINING\n\n")
 
             # print total run statistics
@@ -484,8 +491,9 @@ def run_test(input_files, argparser, cache, nl_parser, it, dev_run=False):
     # get bleu
     sys.stderr.write("SCORE BLEU...\n")
     bleu_out = open('output-bleu.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it), 'w')
-    print >> bleu_out, decoder.bleu("%s/mteval/fast_score" % argparser.decoder, "%s.ref" % input_files,
+    bleu_raw = decoder.bleu("%s/mteval/fast_score" % argparser.decoder, "%s.ref" % input_files,
                                     'output-translation.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it)).strip()
+    print >> bleu_out, bleu_raw
     bleu_out.close()
 
     mrl_out = open('output-mrl.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it), 'w')
@@ -541,7 +549,7 @@ def run_test(input_files, argparser, cache, nl_parser, it, dev_run=False):
     eval_out.close()
     # print test statistics
     sys.stderr.write("EVALUATION: %s\n" % eval_info)
-    return round(f1, 2)
+    return round(f1, 2), float(bleu_raw)
 
 
 if __name__ == '__main__':
