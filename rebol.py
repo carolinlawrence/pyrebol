@@ -106,8 +106,8 @@ def main():
     argparser.add_argument("-b", "--bleu_ref_type", type=int, choices=[0, 1, 2, 3], required=False, default=3,
                            help="which reference(s) should be used to calculate per sentence bleu: 0 uses original reference, 1 uses new, just found reference, 2 uses all")
     argparser.add_argument("--rank", action="store_true", default=False, help="use ranks instead of scores")
-    argparser.add_argument('--test_all', action="store_true", default=False,
-                           help="run test for every weight generated during training")
+    argparser.add_argument('--test_following', type=str, default="",
+                           help="specify which iteration's weights should be run, enter 0 for all and separate several with ','")
     argparser.add_argument('--skip_train', action="store_true", default=False,
                            help="allows the training to be skipped in case only testing is to occur")
     argparser = argparser.parse_args()
@@ -117,6 +117,13 @@ def main():
 
     try:
         last_trained_iteration = argparser.iterations
+
+        if argparser.test_following.strip()!="":
+            iterations_to_test = argparser.test_following.split(", ")
+            sys.stderr.write("Will test the following iterations: %s\n" % iterations_to_test)
+        else:
+            sys.stderr.write("Will test all iterations\n")
+
         if not argparser.skip_train:
             ''' Run Train '''
             ''' if argparser.bleu_ref_type is 3 that means the algorithms own indented default is used:
@@ -160,7 +167,6 @@ def main():
 
             # if use a hold out set, we splice the correct number from the top of the list
             if argparser.hold_out>0:
-                # TODO make sure there is no 1 sent overlap between dev and train
                 dev_prefix = "dev"
                 nl_dev_out = open("%s.in" % dev_prefix, 'w')
                 for ele in nl[:argparser.hold_out]:
@@ -261,9 +267,6 @@ def main():
                             inverse_rank -= 1
                         entry.bleu_rank = inverse_rank
                         prev = entry.bleu_score
-
-                    # sys.stderr.write("kbest list size: %s\n" % len(kbest_list))
-                    # sys.stderr.write("kbest list: %s\n" % kbest_list)
 
                     # adjust decoder scores to lie between [0,1]
                     min_score = min(entry.decoder_score for entry in kbest_list)
@@ -440,11 +443,11 @@ def main():
         sys.stderr.write("STARTING TESTING\n")
         start_test = time.time()
 
-        if argparser.test_all is True:
-            for it in range(1, last_trained_iteration + 1):
-                run_test(argparser.test, argparser, cache, nl_parser, it)
-        else:
+        if argparser.test_following.strip() == "":
             run_test(argparser.test, argparser, cache, nl_parser, last_trained_iteration)
+        else:
+            for it in iterations_to_test:
+                run_test(argparser.test, argparser, cache, nl_parser, int(it))
 
         h, m, s = convert_time(time.time() - start_test)
         sys.stderr.write("Testing took: %d:%02d:%02d\n" % (h, m, s))

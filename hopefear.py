@@ -3,6 +3,7 @@
 import sys
 import rebol
 from nlpminion import decoder
+import operator
 
 
 def hope_fear(kbest_list, action, rank=False):
@@ -10,7 +11,7 @@ def hope_fear(kbest_list, action, rank=False):
         if rank is True:
             search_list = [entry.decoder_rank + entry.bleu_rank for entry in kbest_list]
             index = search_list.index(max(search_list))
-            # sys.stderr.write("hope rank max: %s for %s\n" % (max(search_list),kbest_list[index]))
+            # sys.stderr.write("hope rank max: %s for %s\n" % (max(search_list),search_list[index]))
         else:
             search_list = [entry.decoder_score + entry.bleu_score for entry in kbest_list]
             index = search_list.index(max(search_list))
@@ -19,7 +20,7 @@ def hope_fear(kbest_list, action, rank=False):
         if rank is True:
             search_list = [entry.decoder_rank - entry.bleu_rank for entry in kbest_list]
             index = search_list.index(max(search_list))
-            # sys.stderr.write("fear rank max: %s for %s\n" % (max(search_list),kbest_list[index]))
+            # sys.stderr.write("fear rank max: %s for %s\n" % (max(search_list),search_list[index]))
         else:
             search_list = [entry.decoder_score - entry.bleu_score for entry in kbest_list]
             index = search_list.index(max(search_list))
@@ -57,9 +58,11 @@ def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser
         if ref_search_type == 1:
             for entry in kbest_list:
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, [kbest_list[0].string])
+            kbest_list = get_new_bleu_ranks(kbest_list)
         elif ref_search_type == 2:
             for entry in kbest_list:
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
+            kbest_list = get_new_bleu_ranks(kbest_list)
         fear = kbest_list[hope_fear(kbest_list, 'fear', rank)]
         # skip fear if it gets the right answer
         if rebol.execute_sentence(fear.string, gold_answer, nl_parser, cache)[0] is True:
@@ -70,6 +73,7 @@ def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser
         if ref_search_type == 2:
             for entry in kbest_list:
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
+            kbest_list = get_new_bleu_ranks(kbest_list)
         hope = kbest_list[hope_fear(kbest_list, 'hope', rank)]
     return hope, fear, type_update, references
 
@@ -85,14 +89,17 @@ def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, cache,
         if ref_search_type == 1:
             for entry in kbest_list:
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, [kbest_list[0].string])
+            kbest_list = get_new_bleu_ranks(kbest_list)
         elif ref_search_type == 2:
             for entry in kbest_list:
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
+            kbest_list = get_new_bleu_ranks(kbest_list)
     else:
         type_update = 2
         if ref_search_type == 2:
             for entry in kbest_list:
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
+            kbest_list = get_new_bleu_ranks(kbest_list)
         hope = kbest_list[hope_fear(kbest_list, 'hope', rank)]
     fear = kbest_list[hope_fear(kbest_list, 'fear', rank)]
     # skip fear if it gets the right answer
@@ -116,9 +123,11 @@ def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser,
         if ref_search_type == 1:
             for entry in kbest_list:
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, [kbest_list[0].string])
+            kbest_list = get_new_bleu_ranks(kbest_list)
         elif ref_search_type == 2:
             for entry in kbest_list:
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
+            kbest_list = get_new_bleu_ranks(kbest_list)
         # get fear
         for count, entry in enumerate(
                 sorted(kbest_list, key=lambda translation: translation.decoder_score-translation.bleu_score, reverse=True)):
@@ -139,6 +148,7 @@ def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser,
         if ref_search_type == 2:
             for entry in kbest_list:
                 entry.bleu_score = decoder.per_sentence_bleu(entry.string, references)
+            kbest_list = get_new_bleu_ranks(kbest_list)
         # get hope
         for count, entry in enumerate(
                 sorted(kbest_list, key=lambda translation: translation.decoder_score+translation.bleu_score, reverse=True)):
@@ -191,3 +201,17 @@ def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser, cach
     if hope is None or fear is None:
         type_update *= -1
     return hope, fear, type_update, references, own_trans_ref
+
+def get_new_bleu_ranks(kbest_list):
+    inverse_rank = len(kbest_list)
+    prev = "start"
+    for count, entry in enumerate(sorted(kbest_list, key=operator.attrgetter('bleu_score'), reverse=True)):
+        if prev != entry.bleu_score and prev != "start":
+            inverse_rank -= 1
+        entry.bleu_rank = inverse_rank
+        prev = entry.bleu_score
+        sys.stderr.write("NEW BLEU SCORES:\n")
+        sys.stderr.write("%s\t%s ||| %s ||| %s ||| %s ||| %s\n" % (
+                            count, entry.string, entry.decoder_score, entry.bleu_score, entry.decoder_rank,
+                            entry.bleu_rank))
+    return kbest_list
