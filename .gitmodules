@@ -1,0 +1,6 @@
+[submodule "nlpminion"]
+	path = nlpminion
+	url = https://github.com/carhaas/nlpminion
+[submodule "smt-semparse"]
+	path = smt-semparse
+	url = https://github.com/carhaas/smt-semparse
