@@ -16,21 +16,48 @@ from nlpminion import decoder
 from nlpminion import translation
 from nlpminion.feature_vector import FeatureVector
 from nlpminion.cache import Cache
+from nlpminion.adadelta import Adadelta
 
 
 class Statistics:
+    '''
+    Small statistics class that keeps track of how many mrls, answers and
+    correct answers there have been in a iteration
+    '''
     def __init__(self):
+        '''
+        initialises variables to 0
+        '''
         self.mrl = 0
         self.answer = 0
         self.correct_answer = 0
 
     def reset(self):
+        '''
+        resets variables to 0
+        '''
         self.mrl = 0
         self.answer = 0
         self.correct_answer = 0
 
 
 def execute_sentence(nl, gold_answer, nl_parser, cache):
+    '''
+    given a sentence, a gold answer, a parser and a cache file, this function
+    sends the sentence to a semantic parser which will return a mrl and an
+    answer. This answer will then be compared to the provided gold answer and
+    is added to the cache. If a sentence is cached already we return the cached
+    result.
+    
+    :param nl: the sentence to be parser
+    :param gold_answer: the gold answer
+    :param nl_parser: the parser to be used
+    :param cache: the cache to be used
+    
+    :return: a tuple containing a boolean that indicates if the answer was
+    correct or not, the mrl, the answer and a boolean that indicates whether
+    this sentence was cached or not
+    '''
     cached = False
     fb = False
     mrl = ""
@@ -48,29 +75,23 @@ def execute_sentence(nl, gold_answer, nl_parser, cache):
         cache.dict[nl] = (fb, mrl, answer)
     return fb, mrl, answer, cached
 
-
-def execute_set(nls, gold_answers, nl_parser):
-    feedback = []
-    # get mrl+answer
-    hyp_mrl, hyp_answer = nl_parser.process_set(nls)
-    if len(hyp_answer) is not len(gold_answers):
-        sys.stderr.write("ERROR: hypothesis answers and gold answers are not of same length\n")
-        sys.exit(1)
-    for counter, entry in enumerate(hyp_answer):
-        if entry.strip() == gold_answers[counter].strip():
-            feedback.append(True)
-        else:
-            feedback.append(False)
-    return feedback, hyp_mrl, hyp_answer
-
-
 def convert_time(elapsed_time):
+    '''
+    Pretties up some elapsed time
+    
+    :param elapsed_time: the elapsed time in seconds
+    
+    :return: the hours, minute and seconds
+    '''
     m, s = divmod(elapsed_time, 60)
     h, m = divmod(m, 60)
     return h, m, s
 
 
 def main():
+    '''
+    the actual rebol training procedures. For details use --help
+    '''
     start = time.time()
     sys.stderr.write("STARTING RUN\n")
     # cache
@@ -96,7 +117,7 @@ def main():
     argparser.add_argument("-e", "--hold_out", type=int, required=False, default=0,
                            help="number of example to hold out for early stopping")
     argparser.add_argument("-t", "--type", type=str, required=True, help="the variant type")
-    argparser.add_argument("-l", "--learning_rate", type=float, required=True, help="the learning rate")
+    argparser.add_argument("-l", "--learning_rate", type=float, required=False, default=0, help="the learning rate")
     argparser.add_argument("-n", "--iterations", type=int, default=999, help="the number of iterations")
     argparser.add_argument("-k", "--kbest", type=int, required=False, default=100, help="size of kbest list")
     argparser.add_argument("-x", "--max", type=int, required=False, default=100,
@@ -107,22 +128,36 @@ def main():
                            help="which reference(s) should be used to calculate per sentence bleu: 0 uses original reference, 1 uses new, just found reference, 2 uses all")
     argparser.add_argument("--rank", action="store_true", default=False, help="use ranks instead of scores")
     argparser.add_argument('--test_following', type=str, default="",
-                           help="specify which iteration's weights should be run, enter 0 for all and separate several with ','")
+                           help="specify which iteration's weights should be run, enter 0 for all and separate several with ','. If left empty only the final iteration is tested.")
     argparser.add_argument('--skip_train', action="store_true", default=False,
                            help="allows the training to be skipped in case only testing is to occur")
+    argparser.add_argument('--update_method', type=str, default="SGD",
+                           help="SGD or adadelta")
     argparser = argparser.parse_args()
 
     # initialise parser
     nl_parser = NLParser(argparser.model_dir)
 
     try:
+
         last_trained_iteration = argparser.iterations
 
-        if argparser.test_following.strip()!="":
+        iterations_to_test = ""
+        sys.stderr.write("argparser.test_following: %s\n" % argparser.test_following)
+        if argparser.test_following.strip() is "":
+            sys.stderr.write("Will test only last iteration\n")
+        elif argparser.test_following.strip() is "0":
+            sys.stderr.write("Will test all iterations\n")
+        else:
             iterations_to_test = argparser.test_following.split(", ")
             sys.stderr.write("Will test the following iterations: %s\n" % iterations_to_test)
-        else:
-            sys.stderr.write("Will test all iterations\n")
+
+        # load cache
+        if argparser.cache.strip() is not "":
+            try:
+                cache.from_gz_file(argparser.cache, " ||| ", True)
+            except (OSError, IOError):
+                sys.stderr.write("WARNING: Specified cache file does not exist: %s\n" % argparser.cache)
 
         if not argparser.skip_train:
             ''' Run Train '''
@@ -135,19 +170,19 @@ def main():
                 if argparser.type == 'rebol_light' or argparser.type == 'rebol_fear_neg_top1' :
                     argparser.bleu_ref_type = 0
 
+            if argparser.update_method.strip() == "adadelta":
+                adadelta = Adadelta()
+            elif argparser.update_method == "SGD":
+                if argparser.learning_rate == 0:
+                    sys.stderr.write("Please set a non-zero learning rate!\n")
+                    sys.exit(1)
+
             sys.stderr.write("CONFIGURATION\n")
             sys.stderr.write("=============\n")
             for option in vars(argparser):
                 sys.stderr.write("%s: %s\n" % (option, getattr(argparser, option)))
             sys.stderr.write("Corpus: SPOC\n")
             sys.stderr.write("=============\n\n")
-
-            # load cache
-            if argparser.cache.strip() is not "":
-                try:
-                    cache.from_gz_file(argparser.cache, " ||| ", True)
-                except (OSError, IOError):
-                    sys.stderr.write("WARNING: Specified cache file does not exist: %s\n" % argparser.cache)
 
             with open("%s.in" % argparser.train) as f:
                 nl = f.read().splitlines()
@@ -228,12 +263,11 @@ def main():
 
                     # write weights to tempfile
                     weights_handle, weights_tmp = tempfile.mkstemp("", "rebol_py_")
-                    if argparser.verbose >= 1:
+                    if argparser.verbose >= 2:
                         sys.stderr.write("TEMP: %s\n" % weights_tmp)
+                        weights.to_file("weights_%s_%s" % (it,sent_counter))
                     weights.to_file(weights_tmp)
-                    weights.to_file("weights_%s_%s" % (it,sent_counter))
                     os.close(weights_handle)
-                    # weights.to_file("weights_%s" % sent_counter)
 
                     # call to the decoder
                     out_raw = decoder.translate_sentence("%s/decoder/cdec" %
@@ -342,7 +376,7 @@ def main():
 
                     # execute & print info for fear
                     sys.stderr.write("\n[FEAR]\n")
-                    if hope is not None:
+                    if fear is not None:
                         fb, mrl, answer, cached = execute_sentence(
                             fear.string, gold_answer[sent_counter], nl_parser, cache)
                         sys.stderr.write("        nrl: %s\n" % fear.string)
@@ -371,18 +405,28 @@ def main():
                     elif update_type == -2:
                         type_2_total += 1
 
-                    # check skip: changed position
                     if update_type == -1 or update_type == -2 or hope is None or fear is None:
                         sys.stderr.write("SKIPPING EXAMPLE: No appropriate hope/fear\n")
                         os.remove(weights_tmp)
                         continue
 
                     # update weights
-                    sys.stderr.write("weights: %s\n" % str(weights))
-                    sys.stderr.write("hope: %s\n" % str(hope.features))
-                    sys.stderr.write("fear: %s\n" % str(fear.features))
-                    weights += (hope.features - fear.features) * argparser.learning_rate
-                    sys.stderr.write("weights after: %s\n" % str(weights))
+                    if argparser.verbose >= 2:
+                        sys.stderr.write("weights: %s\n" % str(weights))
+                        sys.stderr.write("hope: %s\n" % str(hope.features))
+                        sys.stderr.write("fear: %s\n" % str(fear.features))
+
+                    if argparser.update_method.strip() == "adadelta":
+                        gradient = fear.features # this is ugly but needs to be done as -/+ operate in place for speed on the FeatureVector. copying it would also be pointless and less efficient as we don't need fear again
+                        gradient = gradient - hope.features
+                        if argparser.verbose >= 2:
+                            sys.stderr.write("gradient %s\n" % str(gradient))
+                        delta_weights = adadelta.update(gradient)
+                        weights += delta_weights
+                    elif argparser.update_method.strip() == "SGD":
+                        weights += (hope.features - fear.features) * argparser.learning_rate
+                    if argparser.verbose >= 2:
+                        sys.stderr.write("weights after: %s\n" % str(weights))
 
                     # delete old weights_tmp
                     os.remove(weights_tmp)
@@ -425,11 +469,11 @@ def main():
                     else:
                         score_of_intereset_dev = f1_dev
                         sys.stderr.write("DEV SCORE: %s F1\n" % score_of_intereset_dev)
-                    if prev_1_dev_score > score_of_intereset_dev and prev_2_dev_score > prev_1_dev_score:
+                    if prev_1_dev_score >= score_of_intereset_dev and prev_2_dev_score >= prev_1_dev_score:
                         sys.stderr.write("BEST DEV TEST REACHED LAST ITERATION: STOPPING TRAINING\n")
                         sys.stderr.write("BEST ITERATION: %s\n\n" % (it-2))
-                        last_trained_iteration = it - 2
-                        break
+                    #    last_trained_iteration = it - 2
+                    #    break
                     prev_2_dev_score = prev_1_dev_score
                     prev_1_dev_score = score_of_intereset_dev
                     sys.stderr.write("BEST DEV TEST NOT YET REACHED: CONTINUING TRAINING\n\n")
@@ -443,11 +487,16 @@ def main():
         sys.stderr.write("STARTING TESTING\n")
         start_test = time.time()
 
-        if argparser.test_following.strip() == "":
-            run_test(argparser.test, argparser, cache, nl_parser, last_trained_iteration)
+        f1_test = 0
+        bleu_test = 0
+        if argparser.test_following.strip() is "":
+            f1_test, bleu_test = run_test(argparser.test, argparser, cache, nl_parser, last_trained_iteration)
+        elif argparser.test_following.strip() is "0":
+            for it in range(1, last_trained_iteration + 1):
+                f1_test, bleu_test = run_test(argparser.test, argparser, cache, nl_parser, it)
         else:
             for it in iterations_to_test:
-                run_test(argparser.test, argparser, cache, nl_parser, int(it))
+                f1_test, bleu_test = run_test(argparser.test, argparser, cache, nl_parser, int(it))
 
         h, m, s = convert_time(time.time() - start_test)
         sys.stderr.write("Testing took: %d:%02d:%02d\n" % (h, m, s))
@@ -458,6 +507,8 @@ def main():
 
         # save cache
         cache.to_gz_file("output-cache.%s.gz" % os.path.basename(argparser.model_dir), " ||| ")
+
+        return f1_test, bleu_test
     except:
         debug.close()
         exception_info = traceback.format_exc()
@@ -472,6 +523,19 @@ def main():
 
 
 def run_test(input_files, argparser, cache, nl_parser, it, dev_run=False):
+    '''
+    allows using some weights to test on some set
+    
+    :param input_files: the test set location (expects the name without the
+    file ending, assumes the existence of .in, .gold and .ref)
+    :param argparser: the argparser containing the correct options
+    :param cache: the cache to be used
+    :param nl_parser: the parser to be used
+    :param it: the iteration from which the weights are to be taken
+    :param dev_run: indicate whether the input_files are a test or dev set
+    
+    :return: a tuple contain the f1 score and the bleu score
+    '''
     with open("%s.in" % input_files) as f:
         nl_input = f.read().splitlines()
     f.close()
@@ -544,7 +608,10 @@ def run_test(input_files, argparser, cache, nl_parser, it, dev_run=False):
     sys.stderr.write("EVAL...\n")
     eval_out = open('output-eval.%s.%s.%s.%s' % (prefix, argparser.type, basename_model_dir, it), 'w')
     recall = 100 * (float(nr_correct) / float(nr_total))
-    precision = 100 * (float(nr_correct) / float(nr_answer))
+    if nr_answer != 0:
+        precision = 100 * (float(nr_correct) / float(nr_answer))
+    else:
+        precision = 0
     if recall + precision != 0:
         f1 = ((2 * recall * precision) / (recall + precision))
     else:
@@ -559,4 +626,5 @@ def run_test(input_files, argparser, cache, nl_parser, it, dev_run=False):
 
 
 if __name__ == '__main__':
-    main()
+    status = main()
+    sys.exit(status)

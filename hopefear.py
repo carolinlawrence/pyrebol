@@ -7,24 +7,30 @@ import operator
 
 
 def hope_fear(kbest_list, action, rank=False):
+    '''
+    Given a k-best list, finds a hope or fear translation.
+    Hope: y+ = decoder_score - (1 - bleu_score)
+    Hope: y- = decoder_score + (1 - bleu_score)
+    
+    :param kbest_list: a kbest_list which is a list containing Translation entries
+    :param action: either 'hope' or 'fear'
+    :param rank: True if the rank values should be taken rather than the actual
+    scores
+    '''
     if action == 'hope':
         if rank is True:
             search_list = [entry.decoder_rank + entry.bleu_rank for entry in kbest_list]
             index = search_list.index(max(search_list))
-            # sys.stderr.write("hope rank max: %s for %s\n" % (max(search_list),search_list[index]))
         else:
             search_list = [entry.decoder_score + entry.bleu_score for entry in kbest_list]
             index = search_list.index(max(search_list))
-            # sys.stderr.write("hope max: %s for %s\n" % (max(search_list),kbest_list[index]))
     elif action == 'fear':
         if rank is True:
             search_list = [entry.decoder_rank - entry.bleu_rank for entry in kbest_list]
             index = search_list.index(max(search_list))
-            # sys.stderr.write("fear rank max: %s for %s\n" % (max(search_list),search_list[index]))
         else:
             search_list = [entry.decoder_score - entry.bleu_score for entry in kbest_list]
             index = search_list.index(max(search_list))
-            # sys.stderr.write("fear max: %s for %s\n" % (max(search_list),kbest_list[index]))
     else:
         sys.stderr.write("\nInvalid action: Options are either 'hope' or 'fear'\nEXITING\n")
         sys.exit(1)
@@ -32,6 +38,17 @@ def hope_fear(kbest_list, action, rank=False):
 
 
 def rampion(kbest_list, references, rank):  # references is a list potentially containing more than 1 reference
+    '''
+    Finds hope and fear in rampion fashion (Gimpel & Smith, 2012)
+    
+    :param kbest_list: a kbest_list which is a list containing Translation entries
+    :param references: the references for this sentence
+    :param rank: a boolean that is true if rank instead of scores should be used
+    
+    :return: a tuple containing the Translation object that is hope and another
+    that is fear, also returns type_update which is 1 to indicate that the top 1
+    is equal to a references and 2 otherwise
+    '''
     top1_equals_ref = False
     for ref in references:
         if kbest_list[0].string == ref:
@@ -49,6 +66,28 @@ def rampion(kbest_list, references, rank):  # references is a list potentially c
 
 # references is a list potentially containing more than 1 reference
 def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser, cache, ref_search_type=0):
+    '''
+    Finds hope and fear in rebol fashion. The top 1 becomes the hope if the
+    parser returns the correct answer and the fear otherwise. The missing element
+    is found in rampion fashion. If the fear is true the example can be skipped
+    (indicated by the type_update variable)
+    
+    :param kbest_list: a kbest_list which is a list containing FeatureVector entries
+    :param references: the references for this sentence
+    :param rank: a boolean that is true if rank instead of scores should be used
+    :param fb: the feedback obtained for the top 1
+    :param gold_answer: this example's gold answer
+    :param nl_parser: the parser to be used
+    :param cache: the cache to be used
+    :param ref_search_type: 0 if the original reference should be used to
+    calculate bleu, 1 to use the new reference (if the top 1 is hope) and
+    2 to use all references found so far and the original
+    
+    :return: a tuple containing the Translation object that is hope and another
+    that is fear, also returns type_update which is 1 to indicate that the top 1
+    has positive feedback which becomes -1 if the fear also has positive feedback,
+    2 if the top 1 has negative feedback. Finally the references list
+    '''
     if fb is True:  # top 1 becomes hope
         type_update = 1
         hope = kbest_list[0]
@@ -80,6 +119,28 @@ def rebol_fear_neg_top1(kbest_list, references, rank, fb, gold_answer, nl_parser
 
 # references is a list potentially containing more than 1 reference
 def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, cache, ref_search_type=0):
+    '''
+    Finds hope and fear in rebol fashion. The top 1 becomes the hope if the
+    parser returns the correct answer. Else the hope and is found in rampion
+    fashion. The fear is always found in rampion fashion. If the fear is true
+    the example can be skipped (indicated by the type_update variable)
+    
+    :param kbest_list: a kbest_list which is a list containing FeatureVector entries
+    :param references: the references for this sentence
+    :param rank: a boolean that is true if rank instead of scores should be used
+    :param fb: the feedback obtained for the top 1
+    :param gold_answer: this example's gold answer
+    :param nl_parser: the parser to be used
+    :param cache: the cache to be used
+    :param ref_search_type: 0 if the original reference should be used to
+    calculate bleu, 1 to use the new reference (if the top 1 is hope) and
+    2 to use all references found so far and the original
+    
+    :return: a tuple containing the Translation object that is hope and another
+    that is fear, also returns type_update which is 1 to indicate that the top 1
+    has positive feedback which becomes -1 if the fear also has positive feedback,
+    2 if the top 1 has negative feedback. Finally the references list
+    '''
     if fb is True:  # top 1 becomes hope
         type_update = 1
         hope = kbest_list[0]
@@ -111,6 +172,34 @@ def rebol_light(kbest_list, references, rank, fb, gold_answer, nl_parser, cache,
 # references is a list potentially containing more than 1 reference
 # own_trans_ref is a list with Translation objects
 def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser, cache, own_trans_ref, ref_search_type=0):
+    '''
+    Finds hope and fear in rebol fashion. The top 1 becomes the hope if the
+    parser returns the correct answer. Else we fall back on a previously found hope,
+    else the k-best list is traversed for a hope and is found in rampion
+    fashion but has to have positive feedback. The fear is the top 1 if it has
+    negative feedback else the k-best list is traversed and the fear found in
+    rampion fashion but has to have negative feedback. 
+    
+    :param kbest_list: a kbest_list which is a list containing FeatureVector entries
+    :param references: the references for this sentence
+    :param rank: a boolean that is true if rank instead of scores should be used
+    :param fb: the feedback obtained for the top 1
+    :param gold_answer: this example's gold answer
+    :param max_spot: how far the k-best list should be traversed to find a
+    hope/fear
+    :param nl_parser: the parser to be used
+    :param cache: the cache to be used
+    :param own_trans_ref: contains only reference found by this function (thus
+    not the original)
+    :param ref_search_type: 0 if the original reference should be used to
+    calculate bleu, 1 to use the new reference (if the top 1 is hope) and
+    2 to use all references found so far and the original
+    
+    :return: a tuple containing the Translation object that is hope and another
+    that is fear, also returns type_update which is 1 to indicate that the top 1
+    has positive feedback, 2 otherwise. Finally the references list containg the
+    original and the own reference list, not containing the original
+    '''
     hope = None
     fear = None
     if fb is True:  # top 1 becomes hope
@@ -165,6 +254,36 @@ def rebol_too_full(kbest_list, references, fb, gold_answer, max_spot, nl_parser,
 # references is a list potentially containing more than 1 reference
 # own_trans_ref is a list with Translation objects
 def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser, cache, own_trans_ref):
+    '''
+    Finds hope and fear using only feedback from the parser (no BLEU is used).
+    The top 1 becomes the hope if the parser returns the correct answer.
+    Else we fall back on a previously found hope,
+    else the k-best list is traversed for a hope by executing each and returning
+    the first with positive feedback.
+    The fear is the top 1 if it has negative feedback else the k-best list is
+    traversed for a hope by executing each and returning the first with negative
+    feedback.
+    
+    :param kbest_list: a kbest_list which is a list containing FeatureVector entries
+    :param references: the references for this sentence
+    :param rank: a boolean that is true if rank instead of scores should be used
+    :param fb: the feedback obtained for the top 1
+    :param gold_answer: this example's gold answer
+    :param max_spot: how far the k-best list should be traversed to find a
+    hope/fear
+    :param nl_parser: the parser to be used
+    :param cache: the cache to be used
+    :param own_trans_ref: contains only reference found by this function (thus
+    not the original)
+    :param ref_search_type: 0 if the original reference should be used to
+    calculate bleu, 1 to use the new reference (if the top 1 is hope) and
+    2 to use all references found so far and the original
+    
+    :return: a tuple containing the Translation object that is hope and another
+    that is fear, also returns type_update which is 1 to indicate that the top 1
+    has positive feedback, 2 otherwise. Finally the references list containg the
+    original and the own reference list, not containing the original
+    '''
     hope = None
     fear = None
     hope_idx = 0
@@ -203,14 +322,20 @@ def exec_only(kbest_list, references, fb, gold_answer, max_spot, nl_parser, cach
     return hope, fear, type_update, references, own_trans_ref
 
 def get_new_bleu_ranks(kbest_list):
+    '''
+    Reranks the k-best list if new bleu scores are calculated.
+    
+    :param kbest_list: the k-best list
+    :returns: the k-best list
+    '''
     inverse_rank = len(kbest_list)
     prev = "start"
+    sys.stderr.write("\nNEW BLEU SCORES:\n")
     for count, entry in enumerate(sorted(kbest_list, key=operator.attrgetter('bleu_score'), reverse=True)):
         if prev != entry.bleu_score and prev != "start":
             inverse_rank -= 1
         entry.bleu_rank = inverse_rank
         prev = entry.bleu_score
-        sys.stderr.write("NEW BLEU SCORES:\n")
         sys.stderr.write("%s\t%s ||| %s ||| %s ||| %s ||| %s\n" % (
                             count, entry.string, entry.decoder_score, entry.bleu_score, entry.decoder_rank,
                             entry.bleu_rank))
