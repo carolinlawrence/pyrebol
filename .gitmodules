@@ -4,3 +4,6 @@
 [submodule "smt-semparse"]
 	path = smt-semparse
 	url = https://github.com/carhaas/smt-semparse
+[submodule "smtsemparse"]
+	path = smtsemparse
+	url = https://github.com/carhaas/smtsemparse
