@@ -11,7 +11,7 @@ import time
 import traceback
 
 import hopefear
-from parser.parse_nl import NLParser
+from smtsemparse.src.parse_nl import NLParser
 from nlpminion import decoder
 from nlpminion import translation
 from nlpminion.feature_vector import FeatureVector
@@ -112,8 +112,8 @@ def main():
     argparser.add_argument("-d", "--decoder", type=str, required=True, help="the location where cdec resides")
     argparser.add_argument("-c", "--ini", type=str, required=True, help="the decoder's ini file")
     argparser.add_argument("-o", "--model_dir", type=str, required=True, default="",
-                           help="specify cache file if one is to be used")
-    argparser.add_argument("-p", "--cache", type=str, required=False, default="", help="the decoder's ini file")
+                           help="the parser model to be used")
+    argparser.add_argument("-p", "--cache", type=str, required=False, default="", help="specify cache file if one is to be used")
     argparser.add_argument("-e", "--hold_out", type=int, required=False, default=0,
                            help="number of example to hold out for early stopping")
     argparser.add_argument("-t", "--type", type=str, required=True, help="the variant type")
